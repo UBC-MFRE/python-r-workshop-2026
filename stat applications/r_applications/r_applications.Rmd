@@ -8,7 +8,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
-# Math/Stats Application Workshop: Python
+# Math/Stats Application Workshop: R
 
 Sections:
 
@@ -25,7 +25,7 @@ Resources:
 
 - [Hypothesis Testing in R](https://www.r-bloggers.com/2022/12/hypothesis-testing-in-r/#:~:text=Hypothesis%20Testing%20in%20R%2C%20A,are%20demonstrated%20in%20this%20course.&text=Each%20type%20of%20test%20can,test().)
 - [Introduction to Econometrics With R](https://www.econometrics-with-r.org/)
-- run `?fn` for R functions, and get their documention in the bottom-right frame.
+- run `?fn` for R functions, and get their documentation in the bottom-right frame.
 - search for a function's documentation on https://www.rdocumentation.org/ 
 
 
@@ -66,7 +66,7 @@ What do we need to look at?
 # check types
 
 policy_df %>%
-  summarise_all(typeof)
+  summarise(across(everything(), typeof))
 ```
 
 These are mostly `doubles`, which are the correct numeric data types. The others are `character`, equivalent to Python's string data type.
@@ -84,7 +84,7 @@ Regarding missing data, we know from our Python work that there's plenty of it. 
 # missingness check
 
 policy_df %>%
-  summarize_all(~ sum(is.na(.)))
+  summarise(across(everything(), ~ sum(is.na(.x))))
 
 # lots!
 ```
@@ -100,7 +100,7 @@ However, our focus today is on Hypothesis Testing, with a side of Data Cleaning.
 
 # 3. 1-Tail Hypothesis Test: Are all countries signing onto all 3 agreements?
 
-We'll use this question to see whether there is a high degree of consensus among the agreements being desireable. With a one-sided test, we'll see if most countries sign up onto all 3, or if there is significant non-acceptance.
+We'll use this question to see whether there is a high degree of consensus among the agreements being desirable. With a one-sided test, we'll see if most countries sign up onto all 3, or if there is significant non-acceptance.
 
 ### Our Hypotheses
 
@@ -128,7 +128,7 @@ head(hypothesis_1_df)
 ```{r}
 # NaN check
 missing_values <- hypothesis_1_df %>%
-  summarise_all(~ sum(is.na(.)))
+  summarise(across(everything(), ~ sum(is.na(.x))))
 
 print(missing_values)
 
@@ -178,7 +178,9 @@ We will use the base R function, `t.test()`
 
 It outputs a test statistic (i.e. t-value here) and an associated p-value.
 
-```{r}
+Run the following line in the console to open the help page in the bottom-right frame. It is not evaluated when the document is knitted.
+
+```{r, eval=FALSE}
 ?t.test
 ```
 
@@ -380,7 +382,7 @@ We also use:
 
 - `alternative`: just as in t-test, this is one of {"two.sided", "less", "greater"}
 
-```{r}
+```{r, eval=FALSE}
 ?prop.test
 ```
 
@@ -389,7 +391,7 @@ We also use:
 # x: we have 53 signatory HI countries and 121 signatory non_HI countries
 # n: we have 55 total HI countries and 126 total non-HI countries
 
-z_test <- prop.test(x = c(53, 121), n = c(55, 126), alternative = "two.sided", correct = F)
+z_test <- prop.test(x = c(53, 121), n = c(55, 126), alternative = "two.sided", correct = FALSE)
 
 z_test
 
@@ -414,7 +416,7 @@ Our reductions will come from the `rel_reduction____` variables. The "rel" part 
 
 1. The reductions are *relative* to their levels at the start of the agreement coming into force. 1 is Kyoto, 2 is Copenhagen, 3 is Paris. 
 
-2. The reductions are proportional: pledging `23.4` emissions reductions means to promise to decrese by 23.4%.
+2. The reductions are proportional: pledging `23.4` emissions reductions means to promise to decrease by 23.4%.
 
 
 
@@ -422,7 +424,7 @@ Our reductions will come from the `rel_reduction____` variables. The "rel" part 
 
 When we ask, "Do high-income countries make higher or lower absolute emission reductions?", what exactly do we mean?
 
-There are *many* ways to turn that question into a series of commands in Python. Each of the 3 climate agreements has 2 reduction pledges; a high and a low value. This gives us 6 variables we can come up with a test on:
+There are *many* ways to turn that question into a series of commands in R. Each of the 3 climate agreements has 2 reduction pledges; a high and a low value. This gives us 6 variables we can come up with a test on:
 
 - we might average all of them
 - we might average the high, or low, ones
@@ -550,7 +552,7 @@ var(hypothesis_4_not_hi_df$rel_reduction_low3) # again same value
 
 T-test:
 
-```{r}
+```{r, eval=FALSE}
 ?t.test
 ```
 
@@ -574,13 +576,11 @@ But we saw that Latvia and Kiribati are extreme outliers. The paper mentioned Ma
 ```{r}
 # Make high income df without Latvia
 hypothesis_4_hi_no_latvia_df <- hypothesis_4_hi_df %>%
-  filter(country != "Latvia") #%>%
-  #reset_index(drop = TRUE)
+  filter(country != "Latvia")
 
 # Make not high income df without Kiribati and Madagascar
 hypothesis_4_not_hi_no_kiri_mad_df <- hypothesis_4_not_hi_df %>%
-  filter(country != "Kiribati" & country != "Madagascar")# %>%
-  #reset_index(drop = TRUE)
+  filter(country != "Kiribati" & country != "Madagascar")
 
 # Two-sample t-test
 t_test_result <- t.test(hypothesis_4_hi_no_latvia_df$rel_reduction_low3, hypothesis_4_not_hi_no_kiri_mad_df$rel_reduction_low3)
@@ -626,7 +626,7 @@ print(plot)
 
 We can get an intuitive feeling for this result with the above scatter plot. Ignore the horizontal variance - it's just to separate out the plot points. On the vertical axis defining reduction pledges, we can see that High Income and other countries aren't distributed differently. 
 
-When we plot *with* the outliers, we see Kiribati's value down around -8000, and then all others clumped together as a solid mass, which provides some justification for removing the outliers. 
+When we plot *with* the outliers, we see Kiribati's value down around -86,500, and then all others clumped together as a solid mass, which provides some justification for removing the outliers.
 
 
 # 7. Group Comparisons: Are average emission levels different by region?
@@ -690,7 +690,7 @@ We also use a `data` argument, which states where to get the `formula` variables
 
 Then, we call `summary()` around our anova variable, and can extract the F-statistic and P-value.
 
-```{r}
+```{r, eval=FALSE}
 ?aov
 ```
 
@@ -716,6 +716,14 @@ The high F-Stat leads to a very low P-value, and so we can reject the null hypot
 
 Extending this a bit, we can run a Tukey test, which analyzes each pair and reports a p-value for if the groups differ.
 
+```{r}
+# Tukey Honest Significant Differences on the fitted ANOVA
+tukey_result <- TukeyHSD(anova_result)
+
+print(tukey_result)
+```
+
+For reference, the group means themselves:
 
 ```{r}
 # Calculate average GHG_percapita values for each wbregion
@@ -823,7 +831,7 @@ We then run `summary()` to output our results. We first input the variable we as
 
 `type`: our standard errors. We use "HC3" heteroskedasticity-robust standard errors again
 
-```{r}
+```{r, eval=FALSE}
 ?lm
 ```
 

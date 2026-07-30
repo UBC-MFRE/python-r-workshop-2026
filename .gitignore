@@ -1,4 +1,8 @@
-.Rproj.user
+.Rproj.user/
 .Rhistory
+*.Rhistory
 .RData
 .Ruserdata
+.ipynb_checkpoints/
+__pycache__/
+.DS_Store

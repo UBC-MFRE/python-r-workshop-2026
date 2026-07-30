@@ -28,21 +28,17 @@ Today, we'll be continuing our dive into R skills. More specifically, we'll be m
 ### 3. Introduction to Data Cleaning: `dplyr`
 > ####  3.1 What is the Tidyverse?
 > ####  3.2 5+1 functions
-> ####  3.3 `filter()`
-> ####  3.4 `arrange()`
-> ####  3.5 `select()`
-> ####  3.6 Pipes
-> ####  3.7 `mutate()` 
-> ####  3.8 `summarise()`
-> ####  3.9 `group_by()`
+> ####  3.3 `select()`
+> ####  3.4 `mutate()`
+> ####  3.5 `filter()`
+> ####  3.6 `arrange()` and pipes
+> ####  3.7 `summarise()`
+> ####  3.8 `group_by()`
 
 ### 4. Introduction to Data Visualization: `ggplot2`
-> ####  4.1 Basics of `ggplot2` 
+> ####  4.1 Basics of `ggplot2`
 > ####  4.2 Line Charts
 > ####  4.3 Scatter Plots
-
-Today, we'll be continuing our dive into R skills. 
-
 
 
 
@@ -54,7 +50,8 @@ Today, we'll be continuing our dive into R skills.
 ### 3.1 What is the Tidyverse?
 
 ```{r}
-pacman::p_load(tidyverse, here)
+# p_load() installs a package only if it is missing, then loads it.
+pacman::p_load(tidyverse, here, skimr)
 
 ```
 
@@ -93,10 +90,16 @@ library(tibble)
 ```
 
 ```{r}
-# read csv file in as data
-cpi <- readr::read_csv(here("..", "data", "food_cpi.csv"))
+# The shared data folder sits at the top level of the repository. here() anchors
+# on the R project file, so build the path from there. The fallback covers the
+# case where the project is opened at the repository root instead of at r/.
+data_dir <- here("..", "data")
+if (!dir.exists(data_dir)) data_dir <- here("data")
 
-# transpose 
+# read csv file in as data
+cpi <- readr::read_csv(file.path(data_dir, "food_cpi.csv"), show_col_types = FALSE)
+
+# transpose
 cpi_t <- t(cpi)
 
 # assign first row as column names
@@ -128,8 +131,8 @@ cpi_t <- rename(cpi_t, "Energy" = "Energy 7", "Food" = "Food 5", "Goods" = "Good
 
 colnames(cpi_t)
 
-cpi_t <- cpi_t %>% 
-  mutate_all(as.numeric)
+cpi_t <- cpi_t %>%
+  mutate(across(everything(), as.numeric))
 
 cpi_t
 ```
@@ -145,7 +148,7 @@ sapply(cpi_t, typeof)
 
 ```
 ```{r}
-install.packages("skimr")
+# skimr was loaded in the first chunk of this notebook.
 skimr::skim(cpi_t)
 
 ```
@@ -154,7 +157,7 @@ skimr::skim(cpi_t)
 
 `select()` is conceptually the simplest, and a good place to start for our data cleaning. It is also probably the simplest: you pass in a dataframe, and name the columns you want to keep. It returns just those columns.
 
-As you can see, `cpi_t` has a lot of non-food columns. We don't want those. We'll select just `"Year"`, `"Food 5"`, and `"All-items excluding food and energy"`, leaving out the others, calling this `food_cpi`
+As you can see, `cpi_t` has a lot of non-food columns. We don't want those. We'll select just `"Year"`, `"Food"`, and `"All_items_but_food_energy"` (the names we assigned in the import chunk above), leaving out the others, calling this `food_cpi`
 
 The generic R function `colnames()` is useful here, in case we need to alter our selection.
 
@@ -222,7 +225,7 @@ Now move all non-compound CPI types to the left: `"Food"`, `"Shelter"`, `"Transp
 Select just the `"Food"` column. Does it become a vector, or stay as a tibble?
 
 ```{r}
-select(cpi_t,Year)
+select(cpi_t, Food)
 
 
 ```
@@ -265,7 +268,7 @@ Sticking to just numeric data as we are, the arithmetic operations give us a sol
 
 The variables we created involving a `lag()` all start with a `NA` value - for the first period of observation, we don't have a prior period's value to pull! As a result, it fetches a `NA`, and we don't get `_change` or `_change_percent` values for the first row.
 
-In some analyses, you'd drop the first row to have a consistent dataset with full coverage. Since we're still interested 2000's CPI values, we're going to leave it. However, when we do operations involving these columns, we'll have to use a special method to tell R to ignore these values.
+In some analyses, you'd drop the first row to have a consistent dataset with full coverage. Since we're still interested in 2000's CPI values, we're going to leave it. However, when we do operations involving these columns, we'll have to use a special method to tell R to ignore these values.
 
 We'll cross that bridge when we come to it.
 
@@ -274,19 +277,23 @@ We'll cross that bridge when we come to it.
 Working with `consumables_cpi`, calculate the yearly change in `Gasoline`, `Energy`, and `Alcohol_tobacco_cannabis` CPI values, and then the percentage changes, as we did above with `food_cpi`
 
 ```{r}
-
-gasoline_lag = Gasoline - lag(Gasoline)
-gasoline_change = (Gasoline-lag(Gasoline)/lag(Gasoline))
+# Every new column is defined inside the mutate() call, so the column names on
+# the right-hand side are looked up in consumables_cpi.
+# Note the bracketing: the numerator must be wrapped before dividing by the lag,
+# and the multiplier for a percentage is 100, not 0.1.
 
 consumables_cpi_mutate <- mutate(
-  consumables_cpi, gasoline_lag,
-  gasoline_change_percentage = 0.1*gasoline_chnage),
-  
-  a_t_c_change = Alcohol_tobacco_cannabis - lag(Alcohol_tobacco_cannabis), 
-a_t_c_change_perc = 0.1*(Alcohol_tobacco_cannabis - lag(Alcohol_tobacco_cannabis)/lag(Alcohol_tobacco_cannabis)),
+  consumables_cpi,
 
-energy_change = Energy - lag(Energy),
-energy_change_perc = 0.1*(Energy-lag(Energy)/lag(Energy)))
+  gasoline_change = Gasoline - lag(Gasoline),
+  gasoline_change_percent = 100 * (Gasoline - lag(Gasoline)) / lag(Gasoline),
+
+  a_t_c_change = Alcohol_tobacco_cannabis - lag(Alcohol_tobacco_cannabis),
+  a_t_c_change_percent = 100 * (Alcohol_tobacco_cannabis - lag(Alcohol_tobacco_cannabis)) / lag(Alcohol_tobacco_cannabis),
+
+  energy_change = Energy - lag(Energy),
+  energy_change_percent = 100 * (Energy - lag(Energy)) / lag(Energy)
+)
 
 consumables_cpi_mutate
 
@@ -295,10 +302,10 @@ consumables_cpi_mutate
 
 
 You can use the `transmute()` function to create new variables, and keep only these. Create a new dataframe, `real_cpis` using transmute. Create the following real price indices:
-- `real_food` equal to `Food` divided by `All-items`
-- `real_gas` equal to `Gasoline` divided by `All-items`
-- `real_shelter` equal to `Shelter` divided by `All-items`
-- `real_energy` equal to `Energy` divided by `All-items`
+- `real_food` equal to `Food` divided by `All_items`
+- `real_gas` equal to `Gasoline` divided by `All_items`
+- `real_shelter` equal to `Shelter` divided by `All_items`
+- `real_energy` equal to `Energy` divided by `All_items`
 
 Also include the `Year` column!
 
@@ -359,7 +366,7 @@ high_inflation
 
 ```
 
-As you can see, `filter()` works by us passing in a dataframe (`food_cpi_mutate`), and then naming a column (`food_change`) as part of a boolean condition. In our case, `food_change > 4.0` returns TRUE for all rows where we have a greater than 4% inflation in food prices; `filter()` then creates a dataframe with just these values in it.
+As you can see, `filter()` works by us passing in a dataframe (`food_cpi_mutate`), and then naming a column (`food_change_percent`) as part of a boolean condition. In our case, `food_change_percent > 4.0` returns TRUE for all rows where we have a greater than 4% inflation in food prices; `filter()` then creates a dataframe with just these values in it.
 
 #### Exercise (`filter()`)
 
@@ -408,13 +415,13 @@ food_cpi_mutate
 # hint! Wrap each condition in brackets () to make it easier to read and check
 
 
-filter(food_cpi_mutate, (food_change < All_items_but_food_energy) & (food_change > 1))
+filter(food_cpi_mutate, (food_change < All_items_change) & (food_change > 1))
 
 
 
 # create a dataframe with the same conditions stated, but joined with | instead
 
-filter(food_cpi_mutate, (food_change < All_items_but_food_energy) | (food_change > 1))
+filter(food_cpi_mutate, (food_change < All_items_change) | (food_change > 1))
 
 
 ```
@@ -486,18 +493,18 @@ Both of these get the same result. But our "good" syntax has a much clearer flow
 
 Indeed, a major part of why Pipes are useful is that they "read" from top down, left to right. In contrast, wrapping functions reads right-to-left, inside to outside. Imagine pseudocode in either of two cases:
 
-`
-`dataframe %>%`
-  `function_1(argument_a) %>%`
-  `function_2(argument_b, argument_c) %>%`
-  `function_3(argument_d)`
-`
+```
+dataframe %>%
+  function_1(argument_a) %>%
+  function_2(argument_b, argument_c) %>%
+  function_3(argument_d)
+```
 
 Compare this to:
 
-`
-`function_3(function_2(function_1(dataframe, argument_a), argument_b, argument_c), argument_d)`
-`
+```
+function_3(function_2(function_1(dataframe, argument_a), argument_b, argument_c), argument_d)
+```
 
 The second statement is *far* more difficult to read, particularly with the function arguments added. 
 
@@ -584,7 +591,7 @@ Let's run a bunch of these.
 
 I mentioned how our `mutate()` function involved taking lags, resulting in our first row having `NA` values in several variables. When we feed these into summary statistic functions, we get problems.
 
-Thankfully, we can tell the functions to ignore these rows, and calculate as though they didn't exist, with the argument `NA.rm = TRUE`. We do this for all the functions except `first()` and `last()`; these two are about what's literally in the data column, so it makes sense we don't want to ignore the value!
+Thankfully, we can tell the functions to ignore these rows, and calculate as though they didn't exist, with the argument `na.rm = TRUE`. We do this for all the functions except `first()` and `last()`; these two are about what's literally in the data column, so it makes sense we don't want to ignore the value!
 
 ```{r}
 # Assuming food_cpi_mutate is your dataframe
@@ -679,7 +686,7 @@ Now calculate three more summary statistics for `food_cpi_mutate`, grouping by `
 
 1. Background
 
-`ggplot2` follows the "grammar of graphics" approach to data visualization, breaking graphs down into their separate fundamental parts.  These components - your geometric objects, scales, scales, etc - are added or modified *individually* and directly with GGplot functions. 
+`ggplot2` follows the "grammar of graphics" approach to data visualization, breaking graphs down into their separate fundamental parts. These components - your geometric objects, aesthetic mappings, scales, etc - are added or modified *individually* and directly with `ggplot2` functions.
 
 This creates a sequential process to building visualizations, where sophisticated plots can be created with simple components. 
 
@@ -697,15 +704,15 @@ These are what you're likely most familiar with in data visualization: the lines
 
 -- `geom_line()`: line plot
 
--- `geom_scatter()`: scatter plot
+-- `geom_point()`: scatter plot
 
 -- `geom_bar()`: bar plot
 
 -- `geom_smooth()`: best fit regression line plot
 
-Geometric objects are added on after your `ggplot()` call after a `+` sign. These can be layered on top of one another to get more intricate plots. If you're plotting a relationship between an `x` and a `Y` variable, you could call both `geom_scatter()` to show all data points, and then a `geom_line()` to show their best-fit linear relationship.
+Geometric objects are added on after your `ggplot()` call after a `+` sign. These can be layered on top of one another to get more intricate plots. If you're plotting a relationship between an `x` and a `Y` variable, you could call both `geom_point()` to show all data points, and then a `geom_smooth()` to show their best-fit linear relationship.
 
-Some geoms function as direct mappings of a data point's value into a visual field. For example, `geom_scatter()` and `geom_line()` use these values as coordinates on the X and Y axes. Other geoms run some sort of statistical transformation or calculation and display an object based off of this result. `geom_smooth()` is an example of this case, where the best-fit line between your X and Y variables is calculated, and then drawn over your dataset.
+Some geoms function as direct mappings of a data point's value into a visual field. For example, `geom_point()` and `geom_line()` use these values as coordinates on the X and Y axes. Other geoms run some sort of statistical transformation or calculation and display an object based off of this result. `geom_smooth()` is an example of this case, where the best-fit line between your X and Y variables is calculated, and then drawn over your dataset.
 
 
 
@@ -723,9 +730,9 @@ To map an aesthetic to a variable, assign the aesthetic (several are listed belo
 
 All of these work with discrete variables; `size` and `color` are also compatible with continuous variables. 
 
-For example, consider a grocery store's sales data, which has data on `item_category`, `price`, and `date`. We might build a `geom_scatter()` plot, with `date` on the x-axis, `price` on the y-axis, and an `aes()` statement with `shape`, `size`, or `color` equal to `item_category` to also describe item types. 
+For example, consider a grocery store's sales data, which has data on `item_category`, `price`, and `date`. We might build a `geom_point()` plot, with `date` on the x-axis, `price` on the y-axis, and an `aes()` statement with `shape`, `size`, or `color` equal to `item_category` to also describe item types.
 
-Some aesthetics can be set manually. In your `geom_X()` function, but outside of the `aes()` statement, you might pass `color = "blue`, to make a line or scatter points a specific color. 
+Some aesthetics can be set manually. In your `geom_X()` function, but outside of the `aes()` statement, you might pass `color = "blue"`, to make a line or scatter points a specific color.
 
 We'll see examples of all of these below!
 
@@ -750,7 +757,7 @@ ggplot(food_cpi_mutate, mapping = aes(x = Year, y = Food)) +
   labs(x = "Year", y = "Food Price CPI", title = "Fig 2: Scatter+Regplot of Food Prices over Time")
 ```
 
-Instead of a lineplot, this visualization shows the individual data points with a `geom_scatter` object, and a linear best fit line with `geom_smooth`. It very starkly shows how food prices jump far off their long-run trend in the final time period, as COVID-era high inflation kicks in. 
+Instead of a lineplot, this visualization shows the individual data points with a `geom_point` object, and a linear best fit line with `geom_smooth`. It very starkly shows how food prices jump far off their long-run trend in the final time period, as COVID-era high inflation kicks in. 
 
 
 
@@ -766,6 +773,7 @@ ggplot(data = food_cpi_mutate) +
                      labels = c("All-items", "Food"),
                      name = "Data Series:")
 ```
+
 `All-items` falls behind `Food` starting roughly in 2005, gradually diverging until roughly 2021. Both tick up with much higher inflation than before, but `Food` does so much more sharply. 
 
 Let's take a look at their percentage growths over time. 
@@ -824,7 +832,7 @@ ggplot(data = food_cpi_mutate) +
     color = "All_items_but_food_energy"
   )) +
   geom_line(mapping = aes(x = Year, y = Food, color = "Food")) +
-  geom_vline(xintercept = 2010) +
+  geom_vline(xintercept = 2020) +
   labs(
     title = "Exercise 1: CPI with Vline",
     x = "Year", y = "CPI"
@@ -847,7 +855,7 @@ ggplot(data = food_cpi_mutate) +
 ```
 
 
-3. Take `services_cpi` and `durables_cpi`. For each, calculate an average of their CPI values using `mutate()`, or any other method of your choice. Create `averaged_cpi` by using the `cbind()` function to retrieve these from their respective Tibbles, along with the `Year` variable from one. Then plot the two series in a line plot, called `"Exercise 3: Durable VS Service CPI"`
+3. Take `services_cpi` and `durables_cpi`. For each, calculate an average of their CPI values using `mutate()`, or any other method of your choice. Create `averaged_cpi` by using the `bind_cols()` function to retrieve these from their respective Tibbles, along with the `Year` variable from one. Then plot the two series in a line plot, called `"Exercise 3: Durable VS Service CPI"`
 
 **This one is hard. Multiple steps and will require some guidance.**
 ```{r}
@@ -891,14 +899,14 @@ services_cpi
 
 # Select `avg_service_cpi` in prep for `bind_cols`
 
-Services_cpi_select <- services_cpi %>% select(
+services_cpi_select <- services_cpi %>% select(
   avg_services_cpi
 )
 
 
 # make `averaged_cpi` tibble for plotting
 
-averaged_cpi <- bind_cols(Services_cpi_select, durables_cpi_select)
+averaged_cpi <- bind_cols(durables_cpi_select, services_cpi_select)
 averaged_cpi
 
 # plotting averaged cpi values
@@ -910,7 +918,7 @@ averaged_cpi
 ### 4.3 Scatter Plots
 
 
-Another fundamental type of plot is the Scatter Plot, where we establish X and Y axes and represent data points as dots in their respective locations. This allows us to visualize the distribution of our data along chosen dimensions, and can be extended in `GGplot2`, with other variables denoted through the size or shape of our scatter points.
+Another fundamental type of plot is the Scatter Plot, where we establish X and Y axes and represent data points as dots in their respective locations. This allows us to visualize the distribution of our data along chosen dimensions, and can be extended in `ggplot2`, with other variables denoted through the size or shape of our scatter points.
 
 You might actually consider a line chart to be a specialized form of a scatter plot, with the points represented and then consecutive points represented with straight lines. `Fig. 2` also shows the similar option of adding a linear best-fit line to show the overall statistical relationship, rather than the standard line plot approach. We'll try this too.
 
@@ -998,11 +1006,11 @@ Note that with inflation being targeted to 2%, this would suggest over longer pe
 
 ```
 
-Now, plotting our percentage increases directly, we see that their trajectory is largely flat. They're mostly distributed around a constant average of 2.5% with random dispersions. As we've seen many times, 2022 is a major outlier, and by a proportionally greater amount than in `Fig. 4` 
+Now, plotting our percentage increases directly, we see that their trajectory is largely flat. They're mostly distributed around a constant average near 2.8% with random dispersions. As we've seen many times, 2022 is a major outlier, and by a proportionally greater amount than in the `Exercise 4` plot of price levels.
 
 
 
-6. An interesting point of discussion is how these results fit together. `Fig. 4` shows us a roughly constant increase in CPI level; `Fig. 5` shows inflation varies year to year, but has no long-run trend in any particular direction. **Do these results make sense together? Discuss with your partners, then as a group.**
+6. An interesting point of discussion is how these results fit together. The `Exercise 4` plot shows us a roughly constant increase in CPI level; the `Exercise 5` plot shows inflation varies year to year, but has no long-run trend in any particular direction. **Do these results make sense together? Discuss with your partners, then as a group.**
 
 
 

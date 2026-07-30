@@ -1,0 +1,11 @@
+# Tested with Python 3.13.5 for the MFRE Coding Workshop 2026.
+pandas==2.2.3
+numpy==2.3.5
+matplotlib==3.10.0
+seaborn==0.13.2
+scipy==1.16.3
+# statsmodels 0.14.4 is incompatible with scipy 1.16 because scipy removed _lazywhere.
+statsmodels>=0.14.5
+scikit-learn==1.6.1
+plotly==5.24.1
+nbconvert==7.16.6

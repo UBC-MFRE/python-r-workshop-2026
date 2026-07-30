@@ -85,7 +85,7 @@ In most cases, these will be fairly similar. However, there may be deviations in
 
 All of your basic mathematical operators are present here too.
 
-Numeric data typess can be added (+), subtracted (-), multiplied (\*), divided (/) and put to exponential powers (\^).
+Numeric data types can be added (+), subtracted (-), multiplied (\*), divided (/) and put to exponential powers (\^).
 
 ```{r}
 # addition
@@ -127,7 +127,7 @@ our_int >= our_double
 our_int <= our_double
 ```
 
-####  Basic Data/Manipulation Exercise
+#### Basic Data/Manipulation Exercise
 
 1.  Is TRUE greater than FALSE?
 2.  Is TRUE equal to 1?
@@ -195,10 +195,6 @@ Unlike vectors, which are one-dimensional, these have two dimensions (matrices) 
 matrix(c(1, 2, 3, 4, 5, 6), nrow = 3, ncol = 2)
 
 matrix(c(1, 2, 3, 4, 5, 6), nrow = 6, ncol = 1)
-
-matrix(c(1, 2, 3, 4, 5, 6), nrow = 6, ncol = 1)
-
-
 ```
 
 Arrays are formed with the `array()` function, and their shape defined with the `dim` argument
@@ -223,7 +219,7 @@ print(array_3d)
 
 As you can see, you pass in a range of some sort (we use a X:Y number slice) and a dimension vector. What shape should the dimension vector be?
 
-Here's a trick: the values should multiply to the same length as your range. 1:24 has 24 elements; 2*3*4 = 24. So this fits!
+Here's a trick: the values should multiply to the same length as your range. `1:24` has 24 elements, and `2 * 3 * 4 = 24`. So this fits!
 
 I doubt you'll be using high-dimensional arrays much; it's just good to know what's out there.
 
@@ -283,10 +279,7 @@ You can set up multiple conditions, to handle `if` one condition is true, and wh
 
 ```{r}
 # Example 2: Check if a number is positive or negative
-```
 
-
-```{r}
 num <- 0
 
 if (num > 0) {
@@ -296,21 +289,22 @@ if (num > 0) {
 }
 ```
 
+Notice that Example 2 calls zero "negative". Two branches are not enough here.
+
+We can also read the number from the console instead of hard-coding it.
 
 ```{r}
+# readline() prompts you when you run this chunk in RStudio.
+# There is no console when the notebook is knitted, so fall back to a fixed value.
+num <- if (interactive()) as.numeric(readline(prompt = "Enter a number: ")) else 5
 
-num <- as.numeric(readline(prompt = "Enter a number:"))
-
-if(num>0){
+if (num > 0) {
   print("Positive")
-}else if (num<0)
-{
- print("Negative")
-} else
-{
+} else if (num < 0) {
+  print("Negative")
+} else {
   print("Zero")
 }
-
 ```
 
 There is also the `else if` syntax. Comparable to Python's `elif` condition, this lets you name a few paths for specific conditions and one generic one for if none are true.
@@ -404,35 +398,39 @@ Now, print all *even* numbers from 1 to 20
 
 Exercise 3:
 
-Create `sum`, equal to 0. Take the numbers from 1 to 20. For each odd number from 1 to 20, add it to `sum`, and multiply sum by every even number. (0+1=1
-3+0=3
-)
+Create `sum`, equal to 0. Take the numbers from 1 to 20. For each odd number, add it to `sum`; for each even number, multiply `sum` by it. So the first three steps are 0 + 1 = 1, then 1 * 2 = 2, then 2 + 3 = 5.
 
 ```{r}
 sum <- 0
-for (i in 1:20){
-  if(i%%2==1){
-    sum<-sum+i
-  }else{
-    sum <- sum*i
+
+for (i in 1:20) {
+  if (i %% 2 == 1) {
+    sum <- sum + i
+  } else {
+    sum <- sum * i
   }
 }
+
+sum
 ```
 
+The same idea, written so that every step is printed and the upper limit is read from the console.
 
 ```{r}
-n <- as.integer(readline(prompt = "Enter the upper limit: "))
+# readline() prompts you when you run this chunk in RStudio.
+# There is no console when the notebook is knitted, so fall back to a fixed value.
+n <- if (interactive()) as.integer(readline(prompt = "Enter the upper limit: ")) else 20L
 
-sum_val <- 0L
+sum_val <- 0
 print(paste("Start with sum =", sum_val))
 
 for (i in 1:n) {
   if (i %% 2 == 1) {
     new_sum <- sum_val + i
-    print(sprintf("%d + %d = %d", sum_val, i, new_sum))
+    print(paste(sum_val, "+", i, "=", new_sum))
   } else {
     new_sum <- sum_val * i
-    print(sprintf("%d * %d = %d", sum_val, i, new_sum))
+    print(paste(sum_val, "*", i, "=", new_sum))
   }
   sum_val <- new_sum
 }
@@ -484,23 +482,23 @@ square(4)
 square(square(2))
 ```
 
-Functions can also have default arguments, which are used when no specific value is given.
-
-#Write a function in R to convert F to C, use user input to take the value of F. 
+**Exercise:** Write an R function that converts a temperature in Fahrenheit to Celsius, and take the Fahrenheit value from user input.
 
 ```{r}
-
-f_to_c<-function(f){
-  c<- (f-32)*(5/9)
-    return (c)
+f_to_c <- function(f) {
+  celsius <- (f - 32) * (5 / 9)
+  return(celsius)
 }
 
-f<- as.numeric(readline(prompt = "Enter Temp in F:"))
-value<-f_to_c(f)
+# readline() prompts you when you run this chunk in RStudio.
+# There is no console when the notebook is knitted, so fall back to a fixed value.
+f <- if (interactive()) as.numeric(readline(prompt = "Enter Temp in F: ")) else 98.6
+
+value <- f_to_c(f)
 print(value)
-
-
 ```
+
+Functions can also have default arguments, which are used when no specific value is given.
 
 ```{r}
 # Example 3: Functions with default inputs
@@ -550,7 +548,10 @@ Write a function that takes a number, and returns TRUE if it's even, and FALSE i
 
 Tip: Check the code from earlier!
 
-```{r}
+Note: chunks that only call a function you have not written yet are marked `eval = FALSE` in the chunk header, so the notebook still knits. Pressing Run Chunk in RStudio runs them anyway, so switch the option off once your function is in place.
+
+```{r eval=FALSE}
+# write is_even() here
 
 
 # sample function calls
@@ -562,12 +563,12 @@ is_even(47)
 
 Write a function that takes a `length` and a `width` of a rectangle, and returns the total area. Test it on the pairs of values 1 and 2, 3.5 and 7.2, 10.1 and 0.1
 
-```{r}
-
+```{r eval=FALSE}
+# write rectangle_area() here
 
 
 # sample function calls
-rectangle_area(1,2)
+rectangle_area(1, 2)
 rectangle_area(3.5, 7.2)
 rectangle_area(10.1, 0.1)
 ```
@@ -698,7 +699,7 @@ calculate_standard_deviation <- function(scores) {
   sum_sq <- 0
   count <- 0
   for (i in 1:length(scores)) {
-    sum_sq <- sum_sq + (scores[i] - fn1(scores))^2
+    sum_sq <- sum_sq + (scores[i] - calculate_average(scores))^2
     count <- count + 1
   }
   sd <- sqrt(sum_sq / count)
@@ -710,9 +711,9 @@ calculate_average(test_scores)
 calculate_standard_deviation(test_scores)
 ```
 
-Ah! So we've got some test scores. We then calculate the average, then the standard deviation. With some knowledge of stats formulas and a minute or two, we could probably figure this out with a minute or two of thinking. 
+Ah! So we've got some test scores. We then calculate the average, then the standard deviation. With some knowledge of stats formulas, we could probably have figured this out from the first version with a minute or two of thinking.
 
-But with good variable names, it'll take us about one second, let alone for more complicated cases. 
+But with good variable names, it takes about one second, let alone for more complicated cases.
 
 ### Exercise
 
@@ -732,9 +733,9 @@ calculate_correlation <- function(x, y) {
   var_list_b <- sum((y - var_b)^2) / n
   
   var_between_a_b <- sum((x - var_a) * (y - var_b)) / n
-  
-  corr_a_b <- var_e / sqrt(var_c * var_d)
-  
+
+  corr_a_b <- var_between_a_b / sqrt(var_list_a * var_list_b)
+
   return(corr_a_b)
 }
 
@@ -768,7 +769,8 @@ calculate_correlation(c(1, 2, 3, 4, 5), c(-1203, 0.12, 2123, 211, 5))
 
 #### Answer
 
-```{r}
+```{r eval=FALSE}
+# write your renamed version of the function here, called correlation()
 
 
 # tests
@@ -887,11 +889,11 @@ Exactly how you decide to format your section headers is up to you. But make sur
 
 ------------------------------------------------------------------------
 
-### 2.7  Code cells
+### 2.7 Code cells
 
 How do you know when to stop adding to one code cell and start a new one?
 
-This is an open question. The code contained in one cell should have some clear relationship binding it all together. But not *all* related code should be in once cell!
+This is an open question. The code contained in one cell should have some clear relationship binding it all together. But not *all* related code should be in one cell!
 
 Cells should generally just have one output, or two if they're closely related (e.g. two versions of one graph). As well, when one distinct stage of code is done, you should end the current cell and create a new one below, with each labelled for what you're doing. This enhances code readability by letting a viewer see the clear step being taken in each block.
 
@@ -944,72 +946,62 @@ In Section 2, we discussed ways to make sure our code is easy to understand (**2
 Next time, we'll move on and introduce some new industry-standard packages for really getting our hands dirty and working with data.
 
 
-#1: Write a R code to inverse an array. take user input for the array
-10,12,13,14,15
-15,14,13,12,10
+## Extra Practice
 
-#2: Write a R code to create a function called "factorial" and calculate factorial of user given input of n. 
+**Exercise 1:** Write R code to reverse an array, taking the array from user input.
 
-5
-120
+    Input:  10, 12, 13, 14, 15
+    Output: 15, 14, 13, 12, 10
 
 ```{r}
+# readline() prompts you when you run this chunk in RStudio.
+# There is no console when the notebook is knitted, so fall back to the example values.
+if (interactive()) {
+  n <- as.numeric(readline(prompt = "Enter the size of the array: "))
+  input_array <- numeric(n)
 
-n<- as.numeric(readline(prompt = "Enter the size of the array"))
-array<-numeric(n)
-
-#take user input the array elements
-for(i in 1:n){
-  array[i]<-as.numeric(readline())
+  # take user input for the array elements
+  for (i in 1:n) {
+    input_array[i] <- as.numeric(readline())
+  }
+} else {
+  input_array <- c(10, 12, 13, 14, 15)
+  n <- length(input_array)
 }
 
-rev_array<- numeric(n)
+rev_array <- numeric(n)
 
 j <- 1
-for(i in n:1){
-  rev_array[j]<-array[i]
-  j<-j+1
+for (i in n:1) {
+  rev_array[j] <- input_array[i]
+  j <- j + 1
 }
 
-print(array)
+print(input_array)
 print(rev_array)
-
 ```
-```{r}
-#factorial
 
-factorail_func <- function(num){
+**Exercise 2:** Write R code that defines a function called `factorial_func()` and use it to calculate the factorial of a number given by the user.
+
+    Input:  5
+    Output: 120
+
+```{r}
+# factorial
+
+factorial_func <- function(num) {
   result <- 1
-  for(i in 1:num){
+
+  for (i in 1:num) {
     result <- result * i
   }
-  
+
   return(result)
 }
 
-n <- as.numeric(readline(prompt = "enter a number: "))
-print(paste("Factorial of", n, "is", factorail_func(n)))
+# readline() prompts you when you run this chunk in RStudio.
+# There is no console when the notebook is knitted, so fall back to a fixed value.
+n <- if (interactive()) as.numeric(readline(prompt = "Enter a number: ")) else 5
 
-
+print(paste("Factorial of", n, "is", factorial_func(n)))
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
