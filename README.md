@@ -64,7 +64,7 @@ git clone https://github.com/UBC-MFRE/python-r-workshop-2026.git
 cd python-r-workshop-2026
 ```
 
-Shared datasets are in [data/](data/). The Day 5 policy dataset is in
+Shared datasets are in [data/](data/). The statistics applications policy dataset is in
 [stat applications/r_applications/policy_analysis.csv](stat%20applications/r_applications/policy_analysis.csv)
 and is used by both the Python and R statistics applications.
 
@@ -73,23 +73,45 @@ Keep the folder layout intact. Several notebooks use paths such as
 
 ## Schedule
 
-Dates, room, and exact times for 2026 are TBC. The day and session structure is
-below.
+All dates are 2026 and follow the MFRE 2026-2027 program schedule. Python runs
+in the August Data Analytics week. R runs in Term 1 alongside FRE 528.
 
-| Day | Morning session | Afternoon session |
-| --- | --- | --- |
-| Day 1 (Mon, TBC) | Intro to Python (I) | Hands-on coding (I) |
-| Day 2 (Tue, TBC) | Intro to Python (II) | Hands-on coding (II) |
-| Day 3 (Wed, TBC) | Intro to R (I) | Hands-on coding (I) |
-| Day 4 (Thu, TBC) | Intro to R (II) | Hands-on coding (II) |
-| Day 5 (Fri, TBC) | Stat applications in Python: summary statistics and hypothesis tests | Stat applications in R: summary statistics and hypothesis tests |
+Rooms: MCLD 2018 is the MacLeod building; MCML 154 is MacMillan; ORCH 4018 is
+Orchard Commons.
+
+### Python
+
+| Date | Session | Time | Room |
+| --- | --- | --- | --- |
+| Wed 19 Aug | Intro to Python (I) | 9:30 to 12:30 | MCLD 2018 |
+| Wed 19 Aug | Intro to Python (I), hands-on coding | 1:30 to 3:30 | MCLD 2018 |
+| Thu 20 Aug | Intro to Python (II) | 9:30 to 12:30 | MCLD 2018 |
+| Thu 20 Aug | Intro to Python (II), hands-on coding | 1:30 to 3:30 | MCLD 2018 |
+| Fri 21 Aug | Stat applications in Python | 9:30 to 11:30 | MCLD 2018 |
+
+Total Python contact time is 12 hours.
+
+### R
+
+| Date | Session | Time | Room |
+| --- | --- | --- | --- |
+| Fri 11 Sep | Intro to R (I) | 12:00 to 2:00 | MCML 154 |
+| Fri 11 Sep | Intro to R (II) | 3:00 to 5:00 | MCML 154 |
+| Wed 16 Sep | Intro to R (I and II), hands-on coding | 3:00 to 5:00 | ORCH 4018 |
+| Fri 18 Sep | Stat applications in R | 12:00 to 2:00 | ORCH 4018 |
+
+Total R contact time is 8 hours.
+
+The schedule grid gives no stated end time for Intro to R (I). The 2:00 end
+above is read from the extent of the block in the grid, matching the layout
+used for the other sessions. Confirm before preparing that session.
 
 ## Python Material
 
-Python runs on the first two workshop days. Folder names below are Python day
+Python runs on Wed 19 and Thu 20 August. Folder names below are Python session
 numbers, not calendar dates.
 
-### Python Day 1
+### Intro to Python (I), Wed 19 Aug
 
 Part 1:
 
@@ -99,36 +121,36 @@ Part 1:
 Part 2:
 
 - [4_Functions_and_Conditionals.ipynb](python/Day%201/Part-2/4_Functions_and_Conditionals.ipynb) - functions, arguments, conditionals, and pandas conditions.
-- [5_Iteration_and_Visualization.ipynb](python/Day%201/Part-2/5_Iteration_and_Visualization.ipynb) - loops, vectorization, pandas methods, and first plots.
+- [5_Iteration_and_Visualization.ipynb](python/Day%201/Part-2/5_Iteration_and_Visualization.ipynb) - `for` loops, iteration over lists and strings, pandas methods, and first plots.
 
-### Python Day 2
+### Intro to Python (II), Thu 20 Aug
 
 - [1_Intro_to_Data_Science.ipynb](python/Day%202/Part-1/1_Intro_to_Data_Science.ipynb) - data import, cleaning, and exploratory analysis with greenhouse gas emissions data.
 - [2_Intro_to_Modeling.ipynb](python/Day%202/Part-2/2_Intro_to_Modeling.ipynb) - regression, classification, and model evaluation.
 
-### Day 5 Python
+### Stat applications, Python (Fri 21 Aug)
 
 - [python_applications.ipynb](stat%20applications/python_applications/python_applications.ipynb) - hypothesis tests, group comparisons, and regression with the climate policy dataset.
 
 ## R Material
 
-### Day 3 R
+### Intro to R (I), Fri 11 Sep
 
 - [1_Intro_to_R.Rmd](r/Day%201/1_Intro_to_R.Rmd) - R data structures, control flow, functions, and coding style. Open [r/r.Rproj](r/r.Rproj) first.
 - [1_Intro_to_R.nb.html](r/Day%201/1_Intro_to_R.nb.html) - rendered notebook for reading.
 
-### Day 4 R
+### Intro to R (II), Fri 11 Sep
 
 - [2_Intro_to_Modeling_R.Rmd](r/Day%202/2_Intro_to_Modeling_R.Rmd) - `dplyr`, `ggplot2`, and applied data cleaning.
 - [2_Intro_to_Modeling_R.nb.html](r/Day%202/2_Intro_to_Modeling_R.nb.html) - rendered notebook for reading.
 
-### Day 5 R
+### Stat applications, R (Fri 18 Sep)
 
 - [r_applications.Rmd](stat%20applications/r_applications/r_applications.Rmd) - the hypothesis-testing workflow in R. Open [r_applications.Rproj](stat%20applications/r_applications/r_applications.Rproj) first.
 
 ## Background Reading
 
-- [climate change pledges actions and outcomes.pdf](resources/climate%20change%20pledges%20actions%20and%20outcomes.pdf) - source paper behind the climate policy dataset used on Day 5.
+- [climate change pledges actions and outcomes.pdf](resources/climate%20change%20pledges%20actions%20and%20outcomes.pdf) - source paper behind the climate policy dataset used in the statistics applications sessions.
 
 ## Repository Structure
 
