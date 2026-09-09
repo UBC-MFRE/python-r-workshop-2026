@@ -6,3 +6,6 @@
 .ipynb_checkpoints/
 __pycache__/
 .DS_Store
+
+# Instructor answer keys, kept out of the student repository
+*_SOLUTIONS.ipynb
