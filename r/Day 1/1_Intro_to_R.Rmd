@@ -1,37 +1,68 @@
 ---
 title: "MFRE Summer Session: R Workshop 1"
-output: html_notebook
+subtitle: "Data structures, control flow, functions, and a first look at ggplot2"
+output:
+  html_document:
+    toc: true
+    toc_depth: 4
+    toc_float:
+      collapsed: true
+      smooth_scroll: true
+    number_sections: false
+    theme: flatly
+    highlight: tango
+    code_folding: show
+    df_print: paged
+    fig_width: 7
+    fig_height: 4.5
 ---
 
 # R Workshop 1
 
-```{r}
-pacman::p_load(tidyverse)
+Run the chunk below first, every time you open this notebook. It loads the packages
+the whole document depends on and sets the defaults used by every plot. If you skip
+it, later chunks fail with "could not find function".
+
+`pacman::p_load()` installs a package if it is missing and then loads it, so it does
+the job of `install.packages()` and `library()` in one call. `tidyverse` is not one
+package but a bundle: loading it gives you `dplyr`, `ggplot2`, `readr`, `tidyr`,
+`tibble`, `stringr`, `forcats` and `purrr` at once. `here` is a small package for
+building file paths, used in section 2.5.
+
+```{r setup, message=FALSE}
+pacman::p_load(tidyverse, here)
+
+# fig.align applies to every figure produced in this document
+knitr::opts_chunk$set(fig.align = "center")
+
+# theme_set() fixes one visual style for every ggplot below, so the figures in this
+# notebook look like a set rather than a pile
+theme_set(theme_minimal(base_size = 12))
 ```
 
 ## Today's Topics:
 
-### 1. Review data structures and manipulation
+> ### 1. Review data structures and manipulation {.unlisted .unnumbered}
+>
+> #### 1.1. Data structures in R (Vectors, matrices, list) {.unlisted .unnumbered}
+>
+> #### 1.2. Control Flow (If statements, loops, user-defined functions) {.unlisted .unnumbered}
 
-> #### 1.1. Data structures in R (Vectors, matrices, list)
+> ### 2. Best practices for R programming {.unlisted .unnumbered}
 >
-> #### 1.2. Control Flow (If statements, loops, user-defined functions)
-
-### 2. Best practices for R programming
-
-> #### 2.1 Indentation and line spacing
+> #### 2.1 Indentation and line spacing {.unlisted .unnumbered}
 >
-> #### 2.2 Naming variables and functions
+> #### 2.2 Naming variables and functions {.unlisted .unnumbered}
 >
-> #### 2.3 Commenting code
+> #### 2.3 Commenting code {.unlisted .unnumbered}
 >
-> #### 2.4 Calling libraries, data import at start of worksheet
+> #### 2.4 Calling libraries, data import at start of worksheet {.unlisted .unnumbered}
 >
-> #### 2.5 Projects and `here()`
+> #### 2.5 Projects and `here()` {.unlisted .unnumbered}
 >
-> #### 2.6 Headers in Markdown
+> #### 2.6 Headers in Markdown {.unlisted .unnumbered}
 >
-> #### 2.7 Code cells
+> #### 2.7 Code cells {.unlisted .unnumbered}
 
 
 ## 1. Review Data Structures and Manipulation
@@ -47,7 +78,12 @@ But first, let's go over some things we've already seen.
 
 ### 1.1 Data Structures in R
 
-#### Basic Data Types 
+#### Basic Data Types
+
+The next chunk creates four objects, one of each basic type. `<-` is the assignment
+operator: it takes the value on the right and stores it under the name on the left.
+R also accepts `=` for assignment, but `<-` is the convention in R code and you
+should use it. Nothing prints, because assignment is silent.
 
 ```{r}
 our_char <- "Harry talks about boring stuff"
@@ -71,9 +107,9 @@ These are our real basic data types. So basic, in fact, that most more advanced 
 
 Since you've done some basic Python, we could relate R data types to Python (near) equivalents.
 
-R Character \~ Python String 
+R Character \~ Python String
 
-R Integer \~ Python Int 
+R Integer \~ Python Int
 
 R Double \~\~\~ Python Float
 
@@ -81,11 +117,60 @@ R Logical \~ Python Bool
 
 In most cases, these will be fairly similar. However, there may be deviations in functionality; keep this in mind.
 
+Two functions tell you what you are actually holding. `class()` reports the type R
+shows to users, and `typeof()` reports how the value is stored internally. They agree
+most of the time. The one place they differ here is `our_double`: its class is
+`numeric` while its storage type is `double`. Treat those two words as the same thing
+for now.
+
+`length()` counts how many elements an object holds. All four objects have length 1.
+There is no such thing as a bare single value in R; a lone number is a vector with one
+element in it.
+
+```{r}
+# class(): the type you work with. typeof(): how R stores it in memory.
+class(our_char)
+typeof(our_char)
+
+class(our_int)
+typeof(our_int)
+
+class(our_double)
+typeof(our_double)
+
+class(our_log)
+typeof(our_log)
+
+# every one of these has length 1
+length(our_double)
+```
+
+The logical quirk mentioned above is worth seeing rather than taking on faith. Because
+TRUE counts as 1 and FALSE counts as 0, arithmetic on logicals works, `sum()` on a
+logical vector counts how many values are TRUE, and `mean()` gives the proportion that
+are TRUE. You will use that constantly once you start filtering data.
+
+```{r}
+# TRUE behaves as 1 and FALSE as 0
+TRUE + TRUE + FALSE
+
+# so sum() counts the TRUEs
+sum(c(TRUE, TRUE, FALSE, FALSE))
+
+# and mean() gives the share of TRUEs: 2 out of 4
+mean(c(TRUE, TRUE, FALSE, FALSE))
+```
+
 #### Operators
 
 All of your basic mathematical operators are present here too.
 
 Numeric data types can be added (+), subtracted (-), multiplied (\*), divided (/) and put to exponential powers (\^).
+
+Each line below prints its own result, so one chunk gives six numbers. Watch what
+happens with mixed types: `our_int` is an integer and `our_double` is a double, and R
+quietly promotes the integer to a double so the arithmetic can go ahead. The answers
+are therefore all doubles.
 
 ```{r}
 # addition
@@ -97,7 +182,7 @@ our_int - our_double
 # multiplication
 our_int*our_double
 
-# subtraction
+# division
 our_int / our_double
 
 # exponentiation
@@ -108,7 +193,16 @@ our_int %% our_double
 
 ```
 
+The exponentiation line prints `4.227428e+14`. That is scientific notation for
+4.227428 times 10 to the power 14, which is how R keeps a very large number readable.
+The modulo line prints 13, because 13.13 goes into 13 zero times and the whole 13 is
+left over as the remainder.
+
 They can also be compared: (>, <, ==, >=, <=)
+
+A comparison does not return a number. It returns a logical, TRUE or FALSE. Note the
+double equals sign `==` for "is equal to"; a single `=` would try to assign instead of
+compare, which is one of the most common beginner errors in both R and Python.
 
 ```{r}
 # greater than
@@ -127,11 +221,17 @@ our_int >= our_double
 our_int <= our_double
 ```
 
+Only the second and fifth lines are TRUE, since 13 is smaller than 13.13. Nothing here
+changes `our_int` or `our_double`; comparisons only read values.
+
 #### Basic Data/Manipulation Exercise
 
 1.  Is TRUE greater than FALSE?
 2.  Is TRUE equal to 1?
 3.  Write a mathematical expression using an exponential.
+
+For the first two, write the comparison itself and let R answer. For the third, any
+expression using `^` will do.
 
 ```{r}
 
@@ -142,6 +242,14 @@ our_int <= our_double
 #### Compound Data Structures
 
 We'll start with Vectors:
+
+A vector is an ordered collection of values that all share one type. "Atomic" is the
+word R uses for that: an atomic vector holds one and only one type of data. You build
+one with `c()`, which stands for combine.
+
+The four vectors below are the character, integer, double and logical cases. Note that
+`logi_vect` has four elements while the others have five; that difference matters in
+the exercise further down.
 
 ```{r}
 char_vect <- c("A", "B", "C", "D", "E")
@@ -156,6 +264,12 @@ logi_vect <- c(TRUE, TRUE, FALSE, FALSE)
 Vectors are a list of ordered values of one common type. You create one with the assignment operator `<-`, then wrapping a series of values inside of `c()`, separated by commas `,`.
 
 You can access the items inside of a vector by "indexing" like in a Python list. However, here the elements are numbered starting from 1 rather than 0. You can also "slice" to take a series of elements by putting two numbers (k and j) in the square brackets: you'll get all elements from k to j, inclusive.
+
+That difference from Python is worth stopping on, because you just spent a week
+training the opposite habit. In Python, `char_vect[0]` would be the first element and
+`char_vect[1:4]` would give three elements, stopping before position 4. In R the first
+element is at position 1, and `char_vect[1:4]` gives four elements, including position
+4. R slices are inclusive at both ends.
 
 ```{r}
 # first element of char_vect
@@ -175,6 +289,71 @@ char_vect[1:4]
 char_vect[2:5]
 ```
 
+Position 0 is not an error in R, which is a trap for anyone coming from Python. Asking
+for `char_vect[0]` returns an empty character vector, printed as `character(0)`,
+rather than the first element. A negative index means something else again: it drops
+that position and returns everything else.
+
+```{r}
+# NOT the first element: position 0 holds nothing, so an empty vector comes back
+char_vect[0]
+
+# a negative index drops that position instead of selecting it
+char_vect[-1]
+
+# you can select several arbitrary positions at once with a vector of indices
+char_vect[c(1, 3, 5)]
+
+# indexing with a logical vector keeps the positions that are TRUE
+doub_vect[doub_vect > 2.5]
+```
+
+The last line deserves a second look. `doub_vect > 2.5` produces
+`FALSE FALSE TRUE TRUE TRUE`, one logical per element, and putting that logical vector
+inside the square brackets keeps only the positions marked TRUE. This is how filtering
+works in R at the lowest level, and it is the idea underneath `dplyr::filter()`, which
+you meet in the next workshop.
+
+Indexing is easier to trust once you can see it. The chunk below turns `doub_vect`
+into a small data frame with one row per element, then draws one bar per position.
+This is our first ggplot, so read it as three parts for now: `ggplot()` takes the
+data, `aes()` says which column goes on which axis, and `geom_col()` says to draw the
+values as bars. Section 3 takes the grammar apart properly.
+
+```{r}
+# one row per element: the position it sits at, and the value stored there
+vect_df <- data.frame(
+  position = seq_along(doub_vect),  # seq_along() gives 1, 2, ..., length(doub_vect)
+  value    = doub_vect
+)
+
+# a TRUE/FALSE column used only to color the element we are indexing
+vect_df$picked <- vect_df$position == 3
+
+vect_df
+```
+
+```{r}
+ggplot(vect_df, aes(x = factor(position), y = value, fill = picked)) +
+  geom_col() +
+  # print the stored value just above each bar
+  geom_text(aes(label = value), vjust = -0.4, size = 4) +
+  # picked == TRUE gets the strong color; guide = "none" hides the legend
+  scale_fill_manual(values = c("FALSE" = "grey70", "TRUE" = "steelblue"),
+                    guide = "none") +
+  labs(
+    title = "doub_vect, one bar per position",
+    subtitle = "The highlighted bar is what doub_vect[3] returns",
+    x = "Position (index)",
+    y = "Value stored at that position"
+  )
+```
+
+Five bars, one per element, in the order they were typed into `c()`. The leftmost bar
+is position 1, not position 0. The blue bar is the third one and its height is 3.1,
+which is exactly what `doub_vect[3]` returns. Slicing with `doub_vect[2:4]` would keep
+the middle three bars.
+
 #### Exercise (Vectors)
 
 1.  Get the last element of `logi_vect`
@@ -182,20 +361,204 @@ char_vect[2:5]
 3.  Get all but the last elements of `char_vect`
 
 ```{r}
-char_vect[1:length(char_vect)-1] 
+char_vect[1:length(char_vect)-1]
 
 
 ```
 
+The line above answers the third question, but it works by accident and it is worth
+knowing why. R applies `:` before `-`, so `1:length(char_vect)-1` is not
+`1:(length(char_vect)-1)`. It is `(1:5) - 1`, which is `0 1 2 3 4`. Position 0
+contributes nothing, so what comes back is positions 1 through 4, which happens to be
+the answer we wanted. Write `char_vect[1:(length(char_vect)-1)]` when you mean it, or
+better, `char_vect[-length(char_vect)]`, which says "drop the last one" directly.
+
+#### Coercion
+
+An atomic vector holds one type. So what happens when you hand `c()` a mixture? R does
+not complain. It converts everything to the one type that can hold all of the values,
+and that silent conversion is called coercion. R falls back in the order logical, then
+integer, then double, then character, since character can represent anything.
+
+```{r}
+# a double and a character together: everything becomes character
+mixed <- c(1, "a", TRUE)
+mixed
+class(mixed)
+
+# a logical and an integer together: TRUE becomes 1L, FALSE becomes 0L
+c(1L, TRUE, FALSE)
+class(c(1L, TRUE, FALSE))
+```
+
+Look closely at the first result: the number 1 came back as the text `"1"` and TRUE
+came back as the text `"TRUE"`, quotes and all. Nothing warned you. This is the usual
+cause of a column that refuses to do arithmetic after being read in from a
+spreadsheet: one stray text entry coerced the whole column to character.
+
+#### Recycling
+
+The second rule that surprises people is recycling. When two vectors of different
+lengths meet in an arithmetic operation, R repeats the shorter one until it is as long
+as the longer one, then works element by element.
+
+```{r}
+# the length-1 vector 2 is recycled across all three elements
+c(1, 2, 3) * 2
+
+# c(10, 20) is recycled three times to line up with six elements:
+# 1+10, 2+20, 3+10, 4+20, 5+10, 6+20
+c(1, 2, 3, 4, 5, 6) + c(10, 20)
+```
+
+That is convenient when the shorter length divides the longer one evenly. When it does
+not, R still recycles and only warns you. The chunk below is deliberately wrong and
+prints a warning underneath its result; read it rather than ignore it.
+
+```{r}
+# 5 is not a multiple of 2, so the recycling stops part way through: 11 22 13 24 15
+c(1, 2, 3, 4, 5) + c(10, 20)
+```
+
+The result is computed anyway. A warning in R does not stop your code, which is
+exactly why you have to read them.
+
+#### Factors
+
+A factor is a vector of labels drawn from a fixed set of allowed values, called levels.
+Use one whenever a column is categorical: region, crop type, treatment group, survey
+response. Underneath, R stores a factor as integers pointing at the level names, which
+is why `as.integer()` on a factor gives you position numbers rather than anything
+meaningful.
+
+Levels also carry an order. If you do not supply one, R sorts them alphabetically,
+which puts "high" before "low" and makes a mess of any plot axis. Supplying `levels`
+explicitly fixes the order.
+
+```{r}
+# without an explicit order, levels come out alphabetically: high, low, medium
+factor(c("low", "high", "medium", "low"))
+
+# with levels given, the order is the one we chose
+farm_size <- factor(c("low", "high", "medium", "low"),
+                    levels = c("low", "medium", "high"))
+farm_size
+
+# the stored integer codes: low is 1, medium is 2, high is 3
+as.integer(farm_size)
+
+# table() counts how many times each level appears
+table(farm_size)
+```
+
+`table()` reports two lows, one medium and one high. Because we set the levels, they
+print in the sensible order rather than alphabetically. A bar chart of the same counts
+makes the point about ordering visible.
+
+```{r}
+# as.data.frame() on a table gives a two-column frame: the level and its count
+farm_counts <- as.data.frame(table(farm_size))
+names(farm_counts) <- c("size", "count")
+farm_counts
+
+ggplot(farm_counts, aes(x = size, y = count)) +
+  geom_col(fill = "steelblue") +
+  labs(
+    title = "Counts of each factor level in farm_size",
+    subtitle = "Bars follow the level order we set, not alphabetical order",
+    x = "Farm size category",
+    y = "Number of observations"
+  )
+```
+
+The bars run low, medium, high from left to right. Had we left the levels to R, the
+same chart would have read high, low, medium, which tells a reader nothing. Set your
+levels whenever a category has a natural order.
+
+#### Matrices and Arrays
+
 The next step up in complexity brings us to Matrices and Arrays.
 
 Unlike vectors, which are one-dimensional, these have two dimensions (matrices) or n-many dimensions (arrays). When you create a matrix with the `matrix()` function, you'll specify how the elements within fit into it with the `nrow` and `ncol` arguments.
+
+A matrix is still one atomic vector underneath. All that `matrix()` adds is a shape,
+and the shape is filled down the first column, then down the second, and so on. That
+is called column-major order, and it is the single thing that confuses people about
+the output below.
 
 ```{r}
 matrix(c(1, 2, 3, 4, 5, 6), nrow = 3, ncol = 2)
 
 matrix(c(1, 2, 3, 4, 5, 6), nrow = 6, ncol = 1)
 ```
+
+The first result has 1, 2, 3 running down column one and 4, 5, 6 running down column
+two, not 1, 2 across the first row. The row and column headers R prints, `[1,]` and
+`[,1]`, are the labels you use for indexing. The second result is the same six values
+in a single column.
+
+Drawing the same matrix as a grid of labelled cells makes the fill order obvious. The
+chunk below builds one row of a data frame per cell, using `expand.grid()` to generate
+every row and column combination, then `as.vector()` to pull the matrix values back
+out in the order R stored them.
+
+```{r}
+mat_example <- matrix(c(1, 2, 3, 4, 5, 6), nrow = 3, ncol = 2)
+
+# expand.grid() varies the first argument fastest, which matches column-major order
+grid_df <- expand.grid(row = 1:nrow(mat_example), col = 1:ncol(mat_example))
+
+# as.vector() strips the shape off and gives back the underlying vector
+grid_df$value <- as.vector(mat_example)
+
+grid_df
+```
+
+```{r}
+ggplot(grid_df, aes(x = factor(col), y = row, fill = value)) +
+  # geom_tile() draws one rectangle per row of the data
+  geom_tile(color = "white", linewidth = 1) +
+  # write the stored value in the middle of each cell
+  geom_text(aes(label = value), color = "white", size = 5) +
+  # matrices are printed with row 1 on top, so reverse the y axis to match
+  scale_y_reverse(breaks = 1:nrow(mat_example)) +
+  scale_fill_gradient(low = "grey55", high = "grey15", guide = "none") +
+  labs(
+    title = "matrix(c(1, 2, 3, 4, 5, 6), nrow = 3, ncol = 2)",
+    subtitle = "Values fill down column 1 first, then down column 2",
+    x = "Column", y = "Row"
+  )
+```
+
+Read the grid the way R printed the matrix: 1, 2, 3 go down the left column and 4, 5,
+6 go down the right one. The shading follows the value, so the darkest cell is the
+last one filled.
+
+Two arguments control everything about how a matrix is built. `nrow` and `ncol` set
+the shape, and `byrow = TRUE` switches the fill order to run across rows instead of
+down columns. Indexing takes two positions inside one set of square brackets,
+`[row, column]`, and leaving one of them blank means "all of them".
+
+```{r}
+# same six values, filled across rows instead of down columns
+matrix(c(1, 2, 3, 4, 5, 6), nrow = 3, ncol = 2, byrow = TRUE)
+
+# dim() reports the shape as c(rows, columns)
+dim(mat_example)
+
+# row 2, column 1
+mat_example[2, 1]
+
+# all of row 1: the blank after the comma means every column
+mat_example[1, ]
+
+# all of column 2: the blank before the comma means every row
+mat_example[, 2]
+```
+
+`mat_example[1, ]` returns `1 4`, which is the first row read across, and
+`mat_example[, 2]` returns `4 5 6`, the whole second column. Both come back as plain
+vectors, because a single row or column has only one dimension left.
 
 Arrays are formed with the `array()` function, and their shape defined with the `dim` argument
 
@@ -205,6 +568,11 @@ array_2d <- array(1:12, dim = c(3,4))
 print(array_2d)
 ```
 
+A two-dimensional array is a matrix. Not "like" a matrix: `class(array_2d)` returns
+both `"matrix"` and `"array"`, so the two functions are two doors into the same thing.
+`array()` is the general case, and `matrix()` is the convenience wrapper for the
+two-dimensional version everyone actually uses.
+
 ```{r}
 # create 2D array just like matrix 1
 array_matrix <- array(1:6, dim=c(3,2))
@@ -212,10 +580,50 @@ print(array_matrix)
 ```
 
 ```{r}
+# the 2D array and the matrix built the same way are identical objects
+class(array_2d)
+identical(array_matrix, matrix(1:6, nrow = 3, ncol = 2))
+```
+
+`identical()` returns TRUE, which settles it.
+
+Adding a third number to `dim` stacks two-dimensional layers behind each other. The
+printout below shows four blocks, each headed `, , 1` through `, , 4`, and each block
+is one 2 by 3 layer.
+
+```{r}
 # create 3D array
 array_3d <- array(1:24, dim = c(2,3,4))
 print(array_3d)
 ```
+
+Faceting is the natural way to show that: one small panel per layer, laid out on the
+same axes. `facet_wrap()` splits the data by a column and draws one panel for each
+distinct value, which is exactly the structure of a third dimension.
+
+```{r}
+# one row per cell of the 3D array: row, column, and which layer it sits in
+arr_df <- expand.grid(row = 1:2, col = 1:3, slice = 1:4)
+arr_df$value <- as.vector(array_3d)
+
+ggplot(arr_df, aes(x = factor(col), y = row, fill = value)) +
+  geom_tile(color = "white", linewidth = 1) +
+  geom_text(aes(label = value), color = "white", size = 4) +
+  scale_y_reverse(breaks = 1:2) +
+  scale_fill_gradient(low = "grey60", high = "grey10", guide = "none") +
+  # one panel per layer; label_both prints "slice: 1" rather than just "1"
+  facet_wrap(~ slice, labeller = label_both) +
+  labs(
+    title = "array(1:24, dim = c(2, 3, 4)) is four stacked 2 x 3 layers",
+    subtitle = "Filling still runs down columns, then across, then to the next layer",
+    x = "Column", y = "Row"
+  )
+```
+
+Panel 1 holds 1 to 6, panel 2 holds 7 to 12, and so on to 24. Within each panel the
+values run down the column first, the same rule as the matrix. Indexing needs three
+numbers now: `array_3d[1, 2, 3]` returns 15, the value in row 1, column 2 of the third
+panel. Check it against the figure.
 
 As you can see, you pass in a range of some sort (we use a X:Y number slice) and a dimension vector. What shape should the dimension vector be?
 
@@ -224,6 +632,9 @@ Here's a trick: the values should multiply to the same length as your range. `1:
 I doubt you'll be using high-dimensional arrays much; it's just good to know what's out there.
 
 #### Exercise (Matrices)
+
+Use `matrix()` for the first two and `array()` for the third. For a 4 by 4 matrix,
+check that the number of values you supply matches `nrow * ncol` before you run it.
 
 ```{r}
 # create a 2x2 matrix with the values 6, 7, 8, 9
@@ -262,6 +673,10 @@ The most common elements of control flow are:
 
 `if` statements can be thought of like a flow chart. If a condition is met, take an action.
 
+The condition inside the round brackets must boil down to a single TRUE or FALSE. If
+it is TRUE, R runs the code in the curly brackets; if it is FALSE, R skips it and
+carries on. Here `num > 0` is TRUE, so the message prints.
+
 ```{r}
 # Example 1: Check if a number is positive
 
@@ -276,6 +691,9 @@ if (num > 0) {
 As you see, they are formatted starting with `if`, then followed by a condition, and then in {} brackets, an action to take if the condition is True
 
 You can set up multiple conditions, to handle `if` one condition is true, and what to do if `else`
+
+`else` catches everything the `if` did not. There is no condition attached to it, so
+whatever falls through lands there. Set `num` to 0 and watch what that costs us.
 
 ```{r}
 # Example 2: Check if a number is positive or negative
@@ -293,6 +711,14 @@ Notice that Example 2 calls zero "negative". Two branches are not enough here.
 
 We can also read the number from the console instead of hard-coding it.
 
+The chunk below uses `else if`, which is the three-branch fix and is explained just
+after it. It also shows a pattern used a few times in this notebook: `readline()`
+stops and waits for you to type something, which works when you press Run Chunk in
+RStudio but has nothing to read from when the whole notebook is knitted. `interactive()`
+returns TRUE only in a live session, so the `if` picks the typed value when you are
+there and a fixed value of 5 when you are not. Without that guard, knitting the
+document would fail.
+
 ```{r}
 # readline() prompts you when you run this chunk in RStudio.
 # There is no console when the notebook is knitted, so fall back to a fixed value.
@@ -309,6 +735,10 @@ if (num > 0) {
 
 There is also the `else if` syntax. Comparable to Python's `elif` condition, this lets you name a few paths for specific conditions and one generic one for if none are true.
 
+R checks the branches from the top down and stops at the first TRUE, so the order you
+write them in matters. With `num` set to 0 the first two conditions are both FALSE and
+the final `else` catches it.
+
 ```{r}
 # Example 3: Check if number is positive, negative, or zero
 num <- 0
@@ -322,9 +752,63 @@ if (num > 0) {
 }
 ```
 
+One warning about layout. The closing `}` and the following `else` must sit on the
+same line, as they do above. Writing the `else` on a line of its own works inside a
+function or a loop but fails at the top level of a script, because R decides the
+statement finished at the `}` and then meets an `else` with no `if` in front of it.
+Keep to `} else {` everywhere and the problem never comes up.
+
+To see the branching over more than one input, run the chain over eleven numbers and
+record which branch each one took. `character(length(nums))` sets up an empty
+character vector with one slot per number, which the loop then fills.
+
+```{r}
+nums <- -5:5
+
+# an empty character vector with one slot per number, ready to be filled in
+sign_label <- character(length(nums))
+
+for (k in seq_along(nums)) {
+  if (nums[k] > 0) {
+    sign_label[k] <- "positive"
+  } else if (nums[k] < 0) {
+    sign_label[k] <- "negative"
+  } else {
+    sign_label[k] <- "zero"
+  }
+}
+
+sign_df <- data.frame(number = nums, label = sign_label)
+sign_df
+```
+
+```{r}
+ggplot(sign_df, aes(x = number, y = number, fill = label)) +
+  geom_col() +
+  # force a tick for every input rather than every second one
+  scale_x_continuous(breaks = nums) +
+  labs(
+    title = "Which branch of the if / else if / else chain each number took",
+    subtitle = "Bar height is the number itself; color is the branch that fired",
+    x = "Input number",
+    y = "The same number, drawn as a bar",
+    fill = "Branch"
+  )
+```
+
+Five bars point down and are colored as negative, five point up and are colored as
+positive, and at zero there is no visible bar at all, because a bar of height 0 has
+nothing to draw. That invisible bar is the whole reason the third branch exists: zero
+is neither of the first two cases, and Example 2 mislabeled it precisely because it
+had nowhere else to put it.
+
 #### For loops
 
 A `for` loop tells R to repeatedly take an action, possibly with changing inputs, `for` some defined number of times.
+
+Read `for (i in 1:5)` as: take each value in the vector `1:5` in turn, call it `i`,
+and run the body once with that value. The loop variable `i` is an ordinary variable
+and survives after the loop ends, holding whatever it had on the final pass.
 
 ```{r}
 # Example 1: Print numbers from 1 to 5
@@ -335,14 +819,16 @@ for (i in 1:5) {
 
 You can combine `if` statements with `for` loops!
 
+`paste()` glues its arguments into one character string, inserting a space between
+them, which is how the number and the message end up in a single printed line.
+
 ```{r}
 # Example 2:
 
 for (i in 1:5) {
   if (i %% 2 == 0) {
     print(paste(i, " is an even number!"))
-  }
-  else {
+  } else {
     print(paste(i, " is an odd number!"))
   }
 }
@@ -363,6 +849,15 @@ Any even integer will have modulo 0 after dividing by 2, and all odd numbers wil
 
 You can also modify variables with each iteration of a `for` loop.
 
+The variable being updated has to exist before the loop starts, which is what
+`sum <- 0` is for. Each pass adds the current `i` to whatever `sum` already held, so
+the printed values are the running total: 1, 3, 6, 10, and so on to 325.
+
+Naming a variable `sum` shadows the built-in `sum()` function, which is a habit worth
+breaking. R can still tell the two apart, because `sum(x)` is used as a function while
+`sum` on its own is used as a value, so nothing breaks here. It still confuses readers,
+and `running_total` would have cost nothing.
+
 ```{r}
 # Example 3:
 
@@ -373,6 +868,42 @@ for (i in 1:25) {
   print(sum)
 }
 ```
+
+Twenty-five printed lines are hard to take in. The same loop, with the running total
+stored instead of printed, plots in one panel.
+
+```{r}
+# a numeric vector of 25 zeros, ready to hold one running total per iteration
+running_total <- numeric(25)
+sum_so_far <- 0
+
+for (i in 1:25) {
+  sum_so_far <- sum_so_far + i    # update the accumulator
+  running_total[i] <- sum_so_far  # record its value at the end of iteration i
+}
+
+loop_df <- data.frame(iteration = 1:25, running_total = running_total)
+head(loop_df, 5)
+```
+
+```{r}
+ggplot(loop_df, aes(x = iteration, y = running_total)) +
+  geom_line(color = "grey60") +
+  geom_point(color = "steelblue", size = 2) +
+  labs(
+    title = "What the for loop accumulates, one iteration at a time",
+    subtitle = "Each point is the value of sum at the end of that pass",
+    x = "Iteration i",
+    y = "Running total after iteration i"
+  )
+```
+
+The first point sits at 1 and the last at 325, matching the final number the loop
+printed. The curve bends upward because each pass adds a larger number than the one
+before, so the gaps between consecutive points keep growing. Pre-allocating
+`running_total` with `numeric(25)` rather than growing a vector inside the loop is the
+habit to copy: R has to copy the whole vector every time it grows, which is slow once
+the loop is long.
 
 #### Exercises (Control Flow)
 
@@ -416,6 +947,10 @@ sum
 
 The same idea, written so that every step is printed and the upper limit is read from the console.
 
+Two changes make this version easier to follow. The result of each step is worked out
+into `new_sum` first, so the old and new values can both appear in the printed line,
+and the accumulator is called `sum_val` rather than `sum`.
+
 ```{r}
 # readline() prompts you when you run this chunk in RStudio.
 # There is no console when the notebook is knitted, so fall back to a fixed value.
@@ -438,6 +973,64 @@ for (i in 1:n) {
 print(paste("Final result:", sum_val))
 ```
 
+Every line shows the value going in, the operation, and the value coming out, and the
+last line matches the answer the shorter version produced.
+
+#### While loops
+
+A `for` loop runs a known number of times. A `while` loop runs until a condition stops
+being true, which is what you want when the number of steps is the thing you are
+trying to find out.
+
+The condition is checked before each pass. Two rules follow from that. If the
+condition is FALSE at the start, the body never runs at all. And if nothing inside the
+body ever makes the condition FALSE, the loop runs forever, so something in the body
+must move toward the exit. Here `balance` grows by 7 percent each pass, so it climbs
+toward the cutoff of 200 and the loop has to stop eventually.
+
+```{r}
+balance <- 100   # starting value
+year <- 0        # counter, so we know how many passes it took
+
+# one row per year, starting with year 0 before any growth
+history <- data.frame(year = 0, balance = 100)
+
+while (balance < 200) {
+  balance <- balance * 1.07               # grow by 7 percent
+  year <- year + 1                        # count the pass
+  # rbind() stacks a new row onto the bottom of the data frame
+  history <- rbind(history, data.frame(year = year, balance = balance))
+}
+
+# how many passes it took, and where it ended up
+year
+balance
+```
+
+Eleven passes, ending at 210.4852. The loop overshoots 200 rather than landing on it,
+because the condition is only checked between passes: the tenth pass leaves the
+balance at 196.7151, which is still under 200, so an eleventh pass runs.
+
+```{r}
+ggplot(history, aes(x = year, y = balance)) +
+  geom_line(color = "grey60") +
+  geom_point(color = "darkred", size = 2) +
+  # a reference line at the value the condition tests against
+  geom_hline(yintercept = 200, linetype = "dashed") +
+  scale_x_continuous(breaks = history$year) +
+  labs(
+    title = "A while loop running until the balance passes 200",
+    subtitle = "Dashed line is the cutoff in the condition; the loop stops on the first point above it",
+    x = "Year (one loop pass each)",
+    y = "Balance"
+  )
+```
+
+Every point below the dashed line triggered another pass. The first point above it is
+the one that ended the loop, and it is the last point drawn. Change 200 to 1000 and
+the same code runs longer without any edit to the loop body, which is the advantage of
+`while` over `for` when the stopping point depends on the values themselves.
+
 #### User-defined Functions
 
 Functions are a vital part of R programming. We've seen plenty already, some from base R, some from community libraries (collections of functions with themed functionality). In short, functions take some set of inputs and perform an action or create an output based on them.
@@ -445,6 +1038,17 @@ Functions are a vital part of R programming. We've seen plenty already, some fro
 You'll sometimes want to create your own customized functions. These are useful for several reasons, but the main one for our purposes is code reusability. By assigning a process to a given function, we can quickly repeat it at a later point, saving space and keeping our code readable.
 
 The basic syntax for writing a function is to pick a name, write `function()` containing any arguments (i.e. inputs), then the process to be carried out in curly brackets {} like in `if` statements and `for` loops.
+
+Two words to be precise about. The names listed inside `function()` are the
+**arguments**: placeholders that stand for whatever the caller supplies. The value the
+function hands back is the **return value**, and it is the only thing that escapes the
+function. Everything else that happens inside is thrown away when the function ends.
+
+A function definition is itself an assignment. `mfre_welcome <- function() { ... }`
+stores a function object under the name `mfre_welcome`, and nothing runs until you
+call it with `mfre_welcome()`. Typing the name without the brackets prints the
+function's own code instead of running it, which is a handy way to look inside a
+function someone else wrote.
 
 ```{r}
 # Example 1: A function without arguments
@@ -459,6 +1063,12 @@ mfre_welcome()
 ```
 
 More useful functions usually include space for inputs, which allows a much broader set of actions to be done. You can use the `return()` statement to have the function directly output some value.
+
+`square_of_2()` can do exactly one thing. `square()` takes an argument `x` and can
+square anything you hand it, which is the difference between a piece of code you use
+once and a tool you keep. The last call, `square(square(2))`, shows that the return
+value of one call can be the argument of the next: the inner call returns 4, and the
+outer one squares that to 16.
 
 ```{r}
 # Example 2: Compare specific square of 2 function with general case square function
@@ -482,7 +1092,65 @@ square(4)
 square(square(2))
 ```
 
+Because `^` works element by element on a whole vector, `square()` does too, with no
+loop and no change to the function. Feed it eleven numbers and eleven come back.
+
+```{r}
+fun_df <- data.frame(x = -5:5)
+
+# one function call handles the whole column at once
+fun_df$squared <- square(fun_df$x)
+
+fun_df
+
+ggplot(fun_df, aes(x = x, y = squared)) +
+  geom_line(color = "grey60") +
+  geom_point(color = "steelblue", size = 2) +
+  scale_x_continuous(breaks = -5:5) +
+  labs(
+    title = "square() applied to every element of a vector at once",
+    subtitle = "One call to square(), eleven results",
+    x = "x",
+    y = "square(x)"
+  )
+```
+
+The familiar parabola, symmetric about zero because squaring throws away the sign.
+The point at x = 0 sits on the floor at 0, and the two ends both reach 25.
+
+Variables created inside a function are **local** to it. They exist while the function
+runs and vanish when it returns, and they do not touch anything of the same name
+outside. The next chunk makes that concrete.
+
+```{r}
+counter <- 10
+
+bump <- function() {
+  # this line does NOT edit the counter outside; it creates a new local one
+  counter <- counter + 1
+  return(counter)
+}
+
+# what the function returns
+bump()
+
+# the outside variable, untouched
+counter
+```
+
+`bump()` returns 11, and `counter` outside is still 10. The assignment inside the
+function created a fresh local variable that happened to share a name. This is a
+feature, not an annoyance: it means you can write a function without checking every
+variable name already in use elsewhere. R does provide `<<-` to reach outside and
+overwrite the global, and you should leave it alone. Pass values in as arguments and
+send results back with `return()`.
+
 **Exercise:** Write an R function that converts a temperature in Fahrenheit to Celsius, and take the Fahrenheit value from user input.
+
+The formula is already in place below, so the thing to study is the shape: one
+argument `f` comes in, an intermediate value `celsius` is computed locally, and
+`return()` hands it back. `celsius` does not exist once the function has finished, so
+the result has to be caught in `value` to be used.
 
 ```{r}
 f_to_c <- function(f) {
@@ -498,7 +1166,15 @@ value <- f_to_c(f)
 print(value)
 ```
 
+98.6 Fahrenheit converts to 37 Celsius, which is the check you already know.
+
 Functions can also have default arguments, which are used when no specific value is given.
+
+Write the default in the argument list as `exponent = 2`. Callers can leave it out and
+get 2, or pass their own value and override it. Arguments without defaults are
+required; arguments with defaults are optional. R matches arguments by position first,
+so `power(2, 3)` sets `x` to 2 and `exponent` to 3, but you can also name them,
+`power(x = 2, exponent = 3)`, which is clearer and safe from getting the order wrong.
 
 ```{r}
 # Example 3: Functions with default inputs
@@ -519,18 +1195,57 @@ power(2) == power(2,2)
 
 ```
 
+The last line prints TRUE, confirming the default was used.
+
+Changing one argument changes the whole shape of the output. The chunk below builds
+every combination of seven `x` values with the two exponents, then calls `power()`
+once on the pair of columns.
+
+```{r}
+power_df <- data.frame(
+  x        = rep(-3:3, times = 2),   # -3 to 3, listed twice
+  exponent = rep(c(2, 3), each = 7)  # 2 for the first seven rows, 3 for the rest
+)
+
+# both arguments are vectors, so one call fills the whole column
+power_df$result <- power(power_df$x, power_df$exponent)
+
+ggplot(power_df, aes(x = x, y = result, color = factor(exponent))) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  scale_x_continuous(breaks = -3:3) +
+  labs(
+    title = "power() with its default exponent, and with exponent = 3",
+    subtitle = "Same function, one argument changed",
+    x = "x",
+    y = "power(x, exponent)",
+    color = "exponent"
+  )
+```
+
+The exponent 2 curve is the parabola again, symmetric and never below zero. The
+exponent 3 curve runs from -27 up to 27 and passes straight through the origin,
+because an odd power keeps the sign of its input. `factor(exponent)` is there to make
+the legend show two discrete groups rather than a continuous color bar, since
+`exponent` is stored as a number.
+
 You can have more complicated processed inside of functions, including loops and `if` statements!
+
+`sum_numbers()` takes a whole vector as its one argument and loops over it with
+`for (num in numbers)`, which walks the values themselves rather than their positions.
+The accumulator `sum` is local, so it starts at 0 on every call and does not interfere
+with the `sum` sitting in the environment from the loop exercise earlier.
 
 ```{r}
 # Example 4: Function with other control flow
 
 sum_numbers <- function(numbers) {
   sum <- 0
-  
+
   for (num in numbers) {
     sum <- sum + num
   }
-  
+
   return(sum)
 }
 
@@ -542,6 +1257,8 @@ sum_numbers(c(1,-1,2,-2,3,-3))
 
 ```
 
+55 and 0. The second call cancels out because every value is paired with its negative.
+
 #### Exercise (User-Defined Functions)
 
 Write a function that takes a number, and returns TRUE if it's even, and FALSE if not. Test it on the values 1, 0, 30, and 47.
@@ -549,6 +1266,10 @@ Write a function that takes a number, and returns TRUE if it's even, and FALSE i
 Tip: Check the code from earlier!
 
 Note: chunks that only call a function you have not written yet are marked `eval = FALSE` in the chunk header, so the notebook still knits. Pressing Run Chunk in RStudio runs them anyway, so switch the option off once your function is in place.
+
+The modulo test from the for loop section is the piece you need, and remember that a
+comparison such as `x %% 2 == 0` already evaluates to TRUE or FALSE, so it can be
+returned directly.
 
 ```{r eval=FALSE}
 # write is_even() here
@@ -562,6 +1283,9 @@ is_even(47)
 ```
 
 Write a function that takes a `length` and a `width` of a rectangle, and returns the total area. Test it on the pairs of values 1 and 2, 3.5 and 7.2, 10.1 and 0.1
+
+This one needs two arguments. Keep them in the order the calls below use, since those
+calls pass values by position rather than by name.
 
 ```{r eval=FALSE}
 # write rectangle_area() here
@@ -593,6 +1317,9 @@ Don't be like me!
 
 ### 2.1. Indentation and line spacing
 
+Both functions below compute `x^2 + y` and both are valid R. The difference is
+entirely in the whitespace. Read them side by side before looking at the result.
+
 ```{r}
 # Inconsistent formatting
 result_bad<- function(x,y){
@@ -608,6 +1335,10 @@ result_good <- function(x, y) {
 result_bad(2, 1) == result_good(2, 1)
 ```
 
+The comparison prints TRUE: both return 5 for `x = 2` and `y = 1`. R does not care
+about the layout, and that is precisely the problem, since nothing stops you writing
+the first version.
+
 As we can see, `result_bad()` and `result_good()` give us the same answer. But which one is a better program?
 
 The names give it away, but why?
@@ -616,10 +1347,18 @@ Spacing and indentation, in short. By indenting the function's code body, `resul
 
 RStudio automatically indents by the correct amounts when creating loops and functions; generally, follow its guide. Use `tab` rather than an equivalent number of spaces.
 
+Two more habits worth picking up now. Put spaces around operators, so `x^2 + y`
+instead of `x^2+y`, and a space after every comma in an argument list, so
+`function(x, y)`. If a chunk gets away from you, select the lines and press
+Ctrl+Shift+A in RStudio, which reindents the selection for you.
 
 ### Exercise (Indentation and Spacing)
 
 Take the following function, `calculate_average()`, and adjust its spacing to be more readable.
+
+Do not change what the function does. Only the layout should differ: line breaks after
+each statement, two spaces of indentation inside the braces, spaces around `<-` and
+`/`, and the closing brace on its own line.
 
 ```{r}
 # start: bad function
@@ -641,6 +1380,10 @@ return(average)}
 Giving good names to objects you create, like variables and functions, seems like a no-brainer.
 
 But what is a good name? Girls named "Khaleesi" and their parents might disagree, but when it comes to naming R variables there are some easy guidelines to follow.
+
+The chunk below defines two functions with names that tell you nothing, applies them to
+a vector with a name that tells you nothing, and prints two numbers. Try to work out
+what the numbers mean before reading on.
 
 ```{r}
 s <- c(78, 85, 92, 76, 80)
@@ -715,23 +1458,116 @@ Ah! So we've got some test scores. We then calculate the average, then the stand
 
 But with good variable names, it takes about one second, let alone for more complicated cases.
 
+Five rules cover most of it.
+
+1.  Use snake_case: lowercase words joined by underscores, as in `test_scores` and `calculate_average`. R code also uses camelCase and dots in places, but pick one and stay with it inside a document.
+2.  Name a thing for what it holds, not what type it is. `test_scores` beats `vec1`.
+3.  Functions do something, so give them verbs: `calculate_average()`, not `average_calculator()`.
+4.  Names cannot start with a digit and cannot contain spaces or hyphens. `2019_prices` and `farm-size` are both syntax errors; `prices_2019` and `farm_size` are fine.
+5.  Do not reuse the name of a function you rely on.
+
+The last one needs a demonstration, because R lets you get away with it and that is
+what makes it dangerous.
+
+```{r}
+# naming a variable c does not break c(), because R looks for a function in that spot
+c <- 5
+c
+c(1, 2, 3)
+
+# rm() deletes an object; put the environment back the way you found it
+rm(c)
+```
+
+R kept the two `c`s apart, and the same protection covers the `sum` we created back in
+the for loop section. The version that bites is a name that is a value in both roles.
+
+```{r}
+# T and F are ordinary variables that happen to hold TRUE and FALSE, so they can be
+# overwritten without any complaint at all
+T <- FALSE
+T
+
+# TRUE spelled out is a reserved word and cannot be reassigned
+TRUE
+
+rm(T)
+```
+
+`T` now means FALSE, and every later line that used `T` as shorthand quietly returns
+the opposite of what its author meant. Nothing warns you. Writing TRUE and FALSE in
+full removes the risk entirely, since `TRUE <- 1` is refused outright with
+`invalid (do_set) left-hand side to assignment`.
+
+One detail the names now let us check. `calculate_standard_deviation()` divides the
+sum of squared deviations by `count`, so it is the population standard deviation and
+returns 5.74108. Base R's `sd()` divides by `count - 1` and returns 6.418723 on the
+same five scores. Neither is wrong; they answer different questions. You could only
+notice the difference once the function had a name that said what it claimed to be.
+
+```{r}
+# the function above, next to base R's version
+calculate_standard_deviation(test_scores)
+sd(test_scores)
+```
+
+Drawing the five scores against the mean shows what both numbers are describing.
+
+```{r}
+score_avg <- calculate_average(test_scores)
+score_sd  <- calculate_standard_deviation(test_scores)
+
+score_df <- data.frame(
+  student = paste0("Student ", 1:5),  # paste0() glues with no separator
+  score   = test_scores
+)
+
+ggplot(score_df, aes(x = student, y = score)) +
+  geom_point(size = 3, color = "grey25") +
+  # solid line at the mean
+  geom_hline(yintercept = score_avg, color = "darkred", linewidth = 1) +
+  # dashed lines one standard deviation either side of it
+  geom_hline(yintercept = c(score_avg - score_sd, score_avg + score_sd),
+             color = "darkred", linetype = "dashed") +
+  # trim the axis to the range the scores actually occupy
+  coord_cartesian(ylim = c(74, 94)) +
+  labs(
+    title = "Five test scores against the mean",
+    subtitle = "Solid line is the mean; dashed lines are one standard deviation away",
+    x = NULL,
+    y = "Score"
+  )
+```
+
+The solid line sits at 82.2. The dashed lines sit at 76.46 and 87.94. Three of the
+five points fall inside that band, and the two that do not, students 3 and 4, are the
+ones pulling the standard deviation up. Two arguments are doing quiet work here.
+`x = NULL` in `labs()` drops the axis title, since "Student 1, Student 2, ..." already
+says it. `coord_cartesian()` trims the y axis to the range the data occupies, which is
+fair for points but would be dishonest for bars: a bar that does not start at zero
+exaggerates every difference.
+
 ### Exercise
 
 Now, an exercise for you. The following function takes two lists of numbers, and calculates the correlation between them.
 
 Rename all of the alphabetized variables (`var_a`, `var_b`, etc) to describe what the values actually represent.
 
+Work out what each line computes before renaming it. `var_a` and `var_b` are averages,
+`var_list_a` and `var_list_b` are variances, and `var_between_a_b` is a covariance.
+Names that say so make the last line read like the formula it is.
+
 ```{r}
 # change names on this function
 calculate_correlation <- function(x, y) {
   n <- length(x)
-  
+
   var_a <- sum(x) / n
   var_b <- sum(y) / n
-  
+
   var_list_a <- sum((x - var_a)^2) / n
   var_list_b <- sum((y - var_b)^2) / n
-  
+
   var_between_a_b <- sum((x - var_a) * (y - var_b)) / n
 
   corr_a_b <- var_between_a_b / sqrt(var_list_a * var_list_b)
@@ -744,20 +1580,28 @@ calculate_correlation(c(1, 2, 3, 4, 5), c(-1, -2, -3, -4, -5))
 calculate_correlation(c(1, 2, 3, 4, 5), c(-1203, 0.12, 2123, 211, 5))
 ```
 
+The two test calls return -1 and 0.3467023. The first pair moves in exact lockstep in
+opposite directions, which is what a correlation of -1 means. The second pair barely
+relates at all.
+
+The chunk below is a half-finished attempt at the renaming: the two averages now have
+useful names, but `var_c` through `var_f` are no better than what they replaced. It is
+the same function and returns the same two numbers.
+
 ```{r}
 
 calculate_correlation <- function(x, y) {
   n <- length(x)
   avg_list_a <- sum(x) / n
   avg_list_b <- sum(y) / n
-  
+
   var_c <- sum((x - avg_list_a)^2) / n
   var_d <- sum((y - avg_list_b)^2) / n
-  
+
   var_e <- sum((x - avg_list_a) * (y - avg_list_b)) / n
-  
+
   var_f <- var_e / sqrt(var_c * var_d)
-  
+
   return(var_f)
 }
 
@@ -766,6 +1610,35 @@ calculate_correlation(c(1, 2, 3, 4, 5), c(-1, -2, -3, -4, -5))
 calculate_correlation(c(1, 2, 3, 4, 5), c(-1203, 0.12, 2123, 211, 5))
 
 ```
+
+A scatter plot of the two test cases shows what those two numbers look like.
+`facet_wrap()` puts them side by side, and `scales = "free_y"` lets each panel use its
+own y axis, which is necessary here because one pair runs from -5 to -1 and the other
+from -1203 to 2123.
+
+```{r}
+cor_df <- data.frame(
+  x = rep(c(1, 2, 3, 4, 5), times = 2),
+  y = c(-1, -2, -3, -4, -5,
+        -1203, 0.12, 2123, 211, 5),
+  pair = rep(c("correlation = -1", "correlation = 0.347"), each = 5)
+)
+
+ggplot(cor_df, aes(x = x, y = y)) +
+  geom_point(size = 3, color = "steelblue") +
+  facet_wrap(~ pair, scales = "free_y") +
+  labs(
+    title = "The two pairs the correlation function was tested on",
+    subtitle = "Same x values in both panels; only the y values differ",
+    x = "x",
+    y = "y"
+  )
+```
+
+In the left panel the five points fall exactly on a straight line sloping down, which
+is the picture of a correlation of -1. In the right panel they are scattered with no
+straight line through them, and the correlation of 0.347 is close to nothing. Always
+plot the pair before you quote a correlation coefficient.
 
 #### Answer
 
@@ -788,24 +1661,30 @@ This helps not just for later review, but even clarifies to your future self wha
 
 A computer science professor once told me about the "rubber duckie" approach to debugging. Simply, you take a rubber duckie at your desk, and explain to it, step by step, what you are doing. Almost magically, a substantial amount of the time you'll figure out what your problem is. Commenting as you go lets you gain some of this benefit.
 
+Note one substantive change in this version alongside the comments: the divisors are
+now `n - 1` rather than `n`, so the variances and the covariance are the sample
+versions. The correlation itself is unchanged, because the `n - 1` divides out of the
+top and bottom of the final ratio. Both versions return -1 and 0.3467023, and both
+agree with base R's `cor()`.
+
 ```{r}
 calculate_correlation <- function(x, y) {
   # function takes two lists of numbers, then calculates and returns their correlation coefficient
-  
+
   # first gets sample size; both lists must have same length or else result will be wrong
   n <- length(x)
-  
+
   # calculates mean values of each dataset
   mean_x <- sum(x) / (n)
   mean_y <- sum(y) / (n)
-  
+
   # then calculates variances
   var_x <- sum((x - mean_x)^2) / (n-1)
   var_y <- sum((y - mean_y)^2) / (n-1)
-  
+
   # calculates covariance between lists
   cov <- sum((x - mean_x) * (y - mean_y)) / (n-1)
-  
+
   # then divides for correlation, and returns it
   corr <- cov / sqrt(var_x * var_y)
   return(corr)
@@ -818,14 +1697,31 @@ calculate_correlation(c(1, 2, 3, 4, 5), c(-1, -2, -3, -4, -5))
 calculate_correlation(c(1, 2, 3, 4, 5), c(-1203, 0.12, 2123, 211, 5))
 ```
 
+```{r}
+# base R already has this; use it to check your own work
+cor(c(1, 2, 3, 4, 5), c(-1, -2, -3, -4, -5))
+cor(c(1, 2, 3, 4, 5), c(-1203, 0.12, 2123, 211, 5))
+```
+
+Identical to the hand-written version, which is the point of writing a check like this
+whenever you implement a formula yourself.
 
 This is a much more sensible way to write the above correlation function, with each step explained along the way.
+
+Comment the reason, not the mechanics. `n <- length(x)` does not need a comment saying
+"gets the length of x"; it needs the one it has, warning that the two inputs must be
+the same length. A comment that only restates the code is one more thing to keep in
+sync when the code changes.
 
 ### 2.4 Calling libraries, data import at start of worksheet
 
 This is a short point.
 
 You'll typically begin a R Markdown script with a big statement calling in a variety of packages and libraries. From our own FRE 530, here's what we bring in for one lab:
+
+The chunk below is commented out on purpose, since several of those packages are not
+installed for this workshop and the chunk would fail. It is here to show the shape of
+a real setup chunk, not to be run.
 
 ```{r}
 # pacman::p_load(here, readxl, dplyr, janitor, Quandl, xts, lubridate, urca, forecast, tidyverse,
@@ -835,6 +1731,10 @@ You'll typically begin a R Markdown script with a big statement calling in a var
 Without comments, of course.
 
 You'll want to put this at the top of your R Markdown sheet. While it's tempting to call libraries as you need them, this makes life hard for someone else using your code later. Since you need to install packages, then load them, they might be running a different R version, and have different packages loaded. It's best to get all the package loading done in one go, rather than get halfway through and then realize you need to restart and run installations.
+
+The same argument applies to reading data. Load every file you need in one chunk near
+the top, so a reader can see at a glance what the document depends on before any
+analysis starts.
 
 ### 2.5 Projects and `here()`
 
@@ -851,25 +1751,60 @@ These are two very helpful features which, put together, make loading files and 
 -   The `here()` function automatically constructs file paths relative to the current R Project's directory, regardless of the operating system.
 -   **It eliminates the need to manually specify long and error-prone paths by providing a simple and flexible way to refer to files and directories within your project.**
 
+Concretely, `read_csv(here("data", "prices.csv"))` finds the file whether the project
+lives on your laptop or on mine, while a path typed out in full only works on the
+machine it was typed on. `here()` takes the folder names as separate arguments and
+joins them with the right separator for the operating system, so the same line works
+on Windows and macOS.
+
+The two calls below build paths without reading anything, so you can see what `here()`
+actually returns on the machine you are knitting on.
+
+```{r}
+# the folder here() treats as the project root
+here()
+
+# a path built from that root; no file has to exist for this to work
+here("data", "prices.csv")
+```
+
+The first line is the root. `here` finds it by searching upward from the working
+directory for a project marker such as an `.Rproj` file, and falls back to the working
+directory itself when there is no marker to find, which is one more reason to make an
+R Project before you start. The second line is that root with `data/prices.csv`
+appended, using whichever separator your operating system wants.
+
 Once you've stumbled through writing one of these massive file paths a few times, you'll appreciate any feature that lets you skip it. As part of your R workflow, whenever you start a new distinct task - an assignment, a paper, etc - create a new folder and an R Project in it.
 
-When we load in data, we'll be using both of these. You should use them for all of your R work, in general. 
+When we load in data, we'll be using both of these. You should use them for all of your R work, in general.
 
 ### 2.6 Headers in Markdown
 
 As you can see, this document is divided up into sections by heading titles. R Notebooks follow a Markdown style format, where headings are noted with \# symbols.
 
-# One gives you a big heading
+The five examples below show what one through five `#` marks give you. They carry two
+pieces of housekeeping so that demonstrating headings does not wreck the document that
+demonstrates them. Each is inside a block quote, written with a leading `>`, which
+keeps them out of the document's section structure. Each also ends with
+`{.unlisted .unnumbered}`, a pandoc attribute that keeps a heading out of the table of
+contents on the left. Neither is needed for ordinary headings; drop both when you
+write your own.
 
-## Two gives you a slightly smaller one
+> # One gives you a big heading {.unlisted .unnumbered}
 
-### Three gives you a yet smaller one
+> ## Two gives you a slightly smaller one {.unlisted .unnumbered}
 
-#### And so does four
+> ### Three gives you a yet smaller one {.unlisted .unnumbered}
 
-##### Etcetera
+> #### And so does four {.unlisted .unnumbered}
+
+> ##### Etcetera {.unlisted .unnumbered}
 
 You can use these to show sections (with larger text) and subsections (with smaller text).
+
+The number of marks sets the level, not just the size. Levels are what the floating
+table of contents on the left is built from, which is why skipping from one `#`
+straight to four breaks the outline even though it looks fine on the page.
 
 For example, I've used the following format for this Notebook:
 
@@ -897,9 +1832,62 @@ This is an open question. The code contained in one cell should have some clear 
 
 Cells should generally just have one output, or two if they're closely related (e.g. two versions of one graph). As well, when one distinct stage of code is done, you should end the current cell and create a new one below, with each labelled for what you're doing. This enhances code readability by letting a viewer see the clear step being taken in each block.
 
+Labelling means the chunk header, not a comment. A header is written
+`{r label, option = value, option = value}`, where the label comes first and must be
+unique in the document. Labels show up in the RStudio document outline and in error
+messages, which turns "something failed" into "the chunk called `load-prices` failed".
+
+The options you will use most:
+
+-   `echo = FALSE` runs the chunk and shows the output but hides the code. Use it for a figure in a report where the reader wants the plot, not the ggplot call.
+-   `eval = FALSE` shows the code but does not run it. The two exercise chunks in section 1.2 use this so the notebook still knits before you have written the functions.
+-   `include = FALSE` runs the chunk and shows nothing at all. Setup chunks often use it.
+-   `message = FALSE` and `warning = FALSE` suppress those two kinds of output. Read them before you silence them.
+-   `fig.width` and `fig.height` set the size of the figure in inches for that chunk only.
+
+Chunk options are worth seeing rather than reading about. Both chunks below draw the
+same plot from the same data. The only difference is in the headers.
+
+```{r wide-figure, fig.width = 7, fig.height = 3}
+ggplot(score_df, aes(x = student, y = score)) +
+  geom_point(size = 3) +
+  labs(title = "fig.width = 7, fig.height = 3", x = NULL, y = "Score")
+```
+
+```{r narrow-figure, fig.width = 4, fig.height = 3}
+ggplot(score_df, aes(x = student, y = score)) +
+  geom_point(size = 3) +
+  labs(title = "fig.width = 4, fig.height = 3", x = NULL, y = "Score")
+```
+
+The second panel is narrower and its axis labels now run into one another, printing as
+"Student 1Student 2Student 3Student 4Student 5". Text keeps its size while the panel shrinks, and ggplot
+does not shorten, drop or rotate labels to make them fit. Either give the chunk more
+width or deal with the labels, which is what `theme()` is for.
+
+```{r rotated-labels, fig.width = 4, fig.height = 3}
+ggplot(score_df, aes(x = student, y = score)) +
+  geom_point(size = 3) +
+  # angle rotates the x axis text; hjust = 1 pulls the right end back under its tick
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Same width, rotated labels", x = NULL, y = "Score")
+```
+
+Readable again in the same four inches. `theme()` controls everything that is not data:
+text, grid lines, legend position, margins. Set the figure size in the chunk header
+where the figure is made, rather than fixing it afterwards in an image editor.
+
 #### Exercise
 
 Say that we're creating some number ranges, plotting them, then running a regression. Is this a good layout of our code?
+
+The chunk does three separate jobs. `seq(1, 50, by = 1)` builds 1 to 50 in steps of 1
+and `seq(2, 100, by = 2)` builds the even numbers to 100, so `number_range_b` is
+exactly twice `number_range_a`; `number_range_c` is the squares. `plot()` is base R's
+plotting function, not ggplot, and draws a scatter of its first argument against its
+second. `lm()` fits a linear regression, written as `outcome ~ predictor`, and
+`summary()` prints the coefficient table for it. Count the outputs this one cell
+produces before you answer the question.
 
 ```{r}
 number_range_a <- seq(1, 50, by = 1)
@@ -923,25 +1911,248 @@ summary(lm_c_a)
 
 ```
 
+The first regression prints a warning about an essentially perfect fit. That is
+correct rather than broken: `number_range_b` is exactly 2 times `number_range_a`, so
+the fitted slope is 0.5 and the residuals are zero to rounding error.
+
 #### Answer
+
+Rewrite the code above across as many chunks as you think it needs, with a comment at
+the top of each saying what stage it covers.
 
 ```{r}
 
 ```
 
+## 3. A First Look at ggplot2
 
+Every figure so far has been built with `ggplot2`, one of the packages `tidyverse`
+loads. Next workshop leans on it heavily, so it is worth taking the pieces apart now.
 
+The name is short for "grammar of graphics". The idea is that a statistical graphic is
+not a chart type you pick off a menu but a sentence you assemble out of a few standard
+parts:
 
+-   **data**: a data frame, one row per observation.
+-   **aesthetic mappings**: which column controls which visual property, written inside `aes()`. Position on the x axis, position on the y axis, color, fill, shape and size are all aesthetics.
+-   **geoms**: the marks actually drawn. `geom_point()` draws points, `geom_line()` lines, `geom_col()` bars, `geom_histogram()` a histogram.
+-   **everything else**: scales, facets, labels, theme.
 
+Layers are joined with `+` at the end of the line, never at the start of the next one.
+R has to see an incomplete expression to know that more is coming.
+
+The data below is invented for the sake of the example. It is not real market data and
+should not be quoted as such. Six years, two crops, one price per crop per year.
+
+```{r}
+farm_prices <- data.frame(
+  # rep(..., times = 2) repeats the whole sequence twice
+  year  = rep(2018:2023, times = 2),
+  # rep(..., each = 6) repeats each label six times in a row
+  crop  = rep(c("Wheat", "Canola"), each = 6),
+  price = c(230, 245, 260, 315, 340, 300,
+            480, 505, 540, 720, 815, 690)
+)
+
+# str() gives a compact description of any object: type, size, and the first values
+str(farm_prices)
+```
+
+Twelve rows and three columns: `year` is an integer, `crop` is character, `price` is a
+double. This shape, one row per observation with variables in columns, is what
+`ggplot2` expects, and getting data into it is most of what the next workshop is about.
+
+Start with the first two parts and nothing else. `ggplot()` takes the data as its first
+argument and the mappings as its second, and the mappings are written inside `aes()`.
+
+```{r}
+ggplot(data = farm_prices, mapping = aes(x = year, y = price)) +
+  labs(
+    title = "Data and mappings, but no geom",
+    x = "Year",
+    y = "Price (invented dollars per tonne)"
+  )
+```
+
+An empty panel. The axes are there, and the y axis is already scaled to cover the
+`price` column, which runs from 230 to 815, because ggplot read the data and worked
+out the range it needs. What is missing is any instruction about what to draw. That is
+the geom's job.
+
+Add one layer and the points appear. The arguments `data =` and `mapping =` are almost
+always dropped, since they are the first two by position, so from here on the call is
+just `ggplot(farm_prices, aes(...))`.
+
+```{r}
+ggplot(farm_prices, aes(x = year, y = price)) +
+  geom_point(size = 2) +
+  labs(
+    title = "One geom added",
+    subtitle = "Twelve points, one per row of farm_prices",
+    x = "Year",
+    y = "Price (invented dollars per tonne)"
+  )
+```
+
+Twelve points, one per row, in two obvious clusters. Nothing in the plot says which
+cluster is which, because nothing has been mapped to a visual property that could tell
+them apart. Mapping `crop` to color fixes that, and ggplot builds the legend on its own.
+
+Note where the mapping goes. Anything inside `aes()` is driven by a column of the
+data. Anything outside `aes()`, such as `linewidth = 1` here, is a fixed setting
+applied to the whole layer.
+
+```{r}
+ggplot(farm_prices, aes(x = year, y = price, color = crop)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  # force a tick at every year rather than every second one
+  scale_x_continuous(breaks = 2018:2023) +
+  labs(
+    title = "Mapping crop to color splits the data into two series",
+    x = "Year",
+    y = "Price (invented dollars per tonne)",
+    color = "Crop"   # names the legend
+  )
+```
+
+Two lines with points on them, one per crop, and a legend naming them. The `color`
+mapping did three jobs at once: it split each geom into two groups, assigned a color
+to each, and generated the legend. Both crops rise to a 2022 peak and fall back in
+2023, canola from a much higher base.
+
+The mapping and setting distinction catches everyone once. Putting a literal color
+inside `aes()` tells ggplot that `"blue"` is data, so it creates a grouping with one
+level, picks its own color for that level, and adds a legend for it.
+
+```{r}
+# WRONG: "blue" is treated as data, so the points are not blue
+ggplot(farm_prices, aes(x = year, y = price, color = "blue")) +
+  geom_point(size = 2) +
+  labs(title = "color inside aes() is read as data", x = "Year", y = "Price")
+```
+
+```{r}
+# RIGHT: outside aes(), "blue" is a setting applied to the layer
+ggplot(farm_prices, aes(x = year, y = price)) +
+  geom_point(size = 2, color = "blue") +
+  labs(title = "color outside aes() is a fixed setting", x = "Year", y = "Price")
+```
+
+The first plot has salmon-colored points and a legend titled "colour" whose single
+entry reads "blue". The second has blue points and no legend. Inside `aes()` means
+"look this up in the data"; outside means "just do this".
+
+Facets are the other way to split data, giving each group its own panel instead of its
+own color. `scales = "free_y"` lets each panel choose its own y axis, which is right
+when the groups live on different scales and wrong when you want them compared
+directly.
+
+```{r}
+ggplot(farm_prices, aes(x = year, y = price)) +
+  geom_col(fill = "steelblue") +
+  facet_wrap(~ crop, scales = "free_y") +
+  scale_x_continuous(breaks = 2018:2023) +
+  labs(
+    title = "The same data as bars, one panel per crop",
+    subtitle = "Each panel gets its own y axis because scales = 'free_y'",
+    x = "Year",
+    y = "Price (invented dollars per tonne)"
+  )
+```
+
+Each panel now has its own axis, so both crops fill their space and the shape of each
+series is easy to read. The cost is that the bars are no longer comparable across
+panels: the tallest canola bar is more than twice the tallest wheat bar, and nothing
+on the page says so. Drop `scales = "free_y"` when that comparison is the point.
+
+Bars have one more setting worth knowing before Day 2. When two groups share an x
+value, `geom_col()` stacks them on top of each other by default, because
+`position = "stack"` is the default. For prices that is nonsense: the top of a stacked
+bar is a wheat price added to a canola price, a number that means nothing.
+
+```{r}
+# the default, and wrong for this data: bar heights are the two prices added together
+ggplot(farm_prices, aes(x = factor(year), y = price, fill = crop)) +
+  geom_col() +
+  labs(
+    title = "Stacked bars, the default",
+    subtitle = "The top of each bar is wheat plus canola, which is not a price",
+    x = "Year", y = "Price (invented dollars per tonne)", fill = "Crop"
+  )
+```
+
+```{r}
+# position = "dodge" puts the groups side by side instead of on top of each other
+ggplot(farm_prices, aes(x = factor(year), y = price, fill = crop)) +
+  geom_col(position = "dodge") +
+  labs(
+    title = "Dodged bars",
+    subtitle = "Two bars per year, each one an actual price",
+    x = "Year", y = "Price (invented dollars per tonne)", fill = "Crop"
+  )
+```
+
+In the first figure the 2022 bar reaches past 1150, a number that appears nowhere in
+the data. In the second, the same year shows two bars at 340 and 815, both of which are
+real. Stacking is right for parts of a whole, such as area planted by crop, and wrong
+for anything that should not be added together.
+
+Note that `x = factor(year)` replaced `x = year` in these two. Bars want a discrete
+axis, and wrapping the numeric year in `factor()` gives them one, with a slot per year.
+
+Some geoms do not plot a column directly but compute something from it first.
+`geom_histogram()` takes one continuous variable, cuts its range into bins, counts how
+many observations land in each, and draws the counts. That is why only `x` is mapped
+here and the y axis appears from nowhere.
+
+```{r}
+# set.seed() fixes the random draw so this figure is the same every time it runs
+set.seed(2026)
+
+# 200 invented field yields in tonnes per hectare
+yields <- data.frame(yield = rnorm(200, mean = 4.2, sd = 0.6))
+
+ggplot(yields, aes(x = yield)) +
+  geom_histogram(bins = 20, fill = "grey40", color = "white") +
+  labs(
+    title = "Distribution of 200 simulated field yields",
+    subtitle = "geom_histogram() counts observations per bin; the y axis is computed, not mapped",
+    x = "Yield (tonnes per hectare)",
+    y = "Number of fields"
+  )
+```
+
+A roughly bell-shaped pile centered a little above 4, with essentially everything
+between 2.7 and 5.8, which is what `rnorm()` with a mean of 4.2 and a standard
+deviation of 0.6 should produce. Change `bins` and the picture changes, so always say
+what you used.
+
+Four errors account for most of the time people lose to `ggplot2` in their first week.
+
+-   Joining layers with `%>%` instead of `+`. The pipe is for data, `+` is for plot layers. Next workshop uses both in the same line and the difference matters.
+-   Putting the `+` at the start of the next line rather than the end of the current one. R finishes the statement at the line break and then meets a `+` with nothing in front of it.
+-   Forgetting `aes()`, as in `ggplot(farm_prices, x = year)`. Columns have to be mapped inside `aes()` or ggplot never looks in the data for them.
+-   Mapping a constant, as in `color = "blue"` inside `aes()`. Settings go outside.
+
+Three habits to carry into the next workshop. Label every axis and give every plot a
+title, since an unlabeled chart is unreadable to anyone but its author. Build plots one
+layer at a time and look at the result after each `+`, which is far faster than
+debugging ten layers at once. And save with
+`ggsave("filename.png", width = 7, height = 4.5)`, which writes the last plot drawn to
+a file at a size you control.
 
 
 ## Conclusion
 
-Today we've revisited some old topics, and introduced some new ones. 
+Today we've revisited some old topics, and introduced some new ones.
 
-In Section 1, we reviewed our main data structures (**1.1**) and methods for control flow in R programming (**1.2**). 
+In Section 1, we reviewed our main data structures (**1.1**) and methods for control flow in R programming (**1.2**).
 
-In Section 2, we discussed ways to make sure our code is easy to understand (**2.1**, **2.3**, **2.6**) and work with (**2.2**, **2.4**), and some ways to just make everyone's life easier (**2.5**). Do your best to follow these, and you'll have an easier time in the long run, and anyone else reading your code (cough cough, the Course Assistants marking it!) will have a much happier time. 
+In Section 2, we discussed ways to make sure our code is easy to understand (**2.1**, **2.3**, **2.6**) and work with (**2.2**, **2.4**), and some ways to just make everyone's life easier (**2.5**). Do your best to follow these, and you'll have an easier time in the long run, and anyone else reading your code (cough cough, the Course Assistants marking it!) will have a much happier time.
+
+Section 3 introduced `ggplot2`, where a plot is a data frame plus a set of aesthetic
+mappings plus one or more geoms, stacked with `+`.
 
 Next time, we'll move on and introduce some new industry-standard packages for really getting our hands dirty and working with data.
 
@@ -952,6 +2163,12 @@ Next time, we'll move on and introduce some new industry-standard packages for r
 
     Input:  10, 12, 13, 14, 15
     Output: 15, 14, 13, 12, 10
+
+The solution below builds the reversed vector by hand to show the mechanics.
+`numeric(n)` creates an empty numeric vector of length `n` to write into, the loop
+counter `i` walks the input backwards with `n:1`, and a second counter `j` walks the
+output forwards from 1. Base R has `rev()`, which does the whole job in one call; write
+the loop first, then check yourself against `rev(input_array)`.
 
 ```{r}
 # readline() prompts you when you run this chunk in RStudio.
@@ -981,10 +2198,18 @@ print(input_array)
 print(rev_array)
 ```
 
+The second printed line is the first one backwards. Note that `i` counts down while
+`j` counts up; getting those two straight is the whole exercise.
+
 **Exercise 2:** Write R code that defines a function called `factorial_func()` and use it to calculate the factorial of a number given by the user.
 
     Input:  5
     Output: 120
+
+The accumulator here starts at 1 rather than 0, because the loop multiplies instead of
+adding and anything times zero stays zero. One caution: `1:num` counts downward when
+`num` is 0, giving `1 0`, so this version returns 0 for an input of 0 rather than the
+correct 1. Guarding against that is a good use of an `if` statement.
 
 ```{r}
 # factorial
@@ -1005,3 +2230,36 @@ n <- if (interactive()) as.numeric(readline(prompt = "Enter a number: ")) else 5
 
 print(paste("Factorial of", n, "is", factorial_func(n)))
 ```
+
+Factorials get large fast, which is easier to appreciate on a chart than in a column of
+numbers. The loop below calls `factorial_func()` on 1 through 10 and stores each
+result.
+
+```{r}
+fact_df <- data.frame(n = 1:10, result = numeric(10))
+
+for (k in 1:10) {
+  fact_df$result[k] <- factorial_func(k)
+}
+
+fact_df
+```
+
+```{r}
+ggplot(fact_df, aes(x = n, y = result)) +
+  geom_line(color = "grey60") +
+  geom_point(color = "darkred", size = 2) +
+  scale_x_continuous(breaks = 1:10) +
+  # a log y axis compresses the huge values so the small ones stay visible
+  scale_y_log10() +
+  labs(
+    title = "factorial_func() from 1 to 10, on a log scale",
+    subtitle = "1! is 1 and 10! is 3628800, so a linear y axis would show almost nothing",
+    x = "n",
+    y = "n factorial (log scale)"
+  )
+```
+
+On a log axis the points climb steadily rather than shooting off the top, which is what
+a log scale is for: it makes multiplicative growth readable. Try the same plot without
+`scale_y_log10()` and the first eight points flatten onto the axis.
