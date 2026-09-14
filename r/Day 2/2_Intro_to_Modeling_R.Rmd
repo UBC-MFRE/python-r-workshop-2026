@@ -1,10 +1,66 @@
 ---
-title: "R Workshop 2"
-output: html_notebook
+title: "R Workshop 2: Data Cleaning with dplyr and Plotting with ggplot2"
+subtitle: "UBC MFRE, Introduction to R"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+    theme: readable
+    highlight: tango
+    code_folding: show
+    fig_caption: true
 ---
+
+```{r setup, include = FALSE}
+# This chunk configures the document. include = FALSE means the code and its
+# output are hidden in the knitted HTML, but the code still runs.
+#
+# knitr::opts_chunk$set() sets defaults for EVERY code chunk below, so we do not
+# have to repeat these options 60 times.
+knitr::opts_chunk$set(
+  echo       = TRUE,   # show the code, not just the result
+  message    = TRUE,   # show package and function messages: some are instructive
+  warning    = TRUE,   # show warnings: we discuss several of them on purpose
+  fig.width  = 7,      # default plot width in inches
+  fig.height = 4.5,    # default plot height in inches
+  fig.align  = "center"
+)
+```
 
 
 # R Workshop 2
+
+
+## How to read this document
+
+Every grey box below is a *code chunk*: R code that actually runs when this
+document is knitted. The white box underneath it is the *output* that R
+produced. The text around them tells you what the code does, why it is written
+that way, and how to read the output.
+
+Three habits will serve you for the whole workshop:
+
+1. Run a chunk, then look at the output before moving on. R is an interactive
+   language. Guessing what a line did is slower than checking.
+2. When a line is unfamiliar, take it apart from the inside out. `mean(x)` is a
+   *function* called `mean` applied to an *argument* `x`.
+3. If something breaks, read the error message from the bottom up. R usually
+   names the function that failed.
+
+Some vocabulary that the rest of the document assumes:
+
+- An **object** is a named thing stored in memory. `x <- 5` creates an object
+  called `x`. The `<-` is the *assignment* operator; `=` also works in most
+  places, but R programmers use `<-` for assignment by convention.
+- A **function** is a named piece of code that takes inputs and returns an
+  output. `sqrt(16)` returns `4`.
+- An **argument** is one of those inputs. Arguments can be given by position
+  (`round(3.14159, 2)`) or by name (`round(3.14159, digits = 2)`). Naming them
+  is slower to type and much easier to read six months later.
+- A **package** is a bundle of functions written by somebody else. You install
+  it once, then load it in every session where you want it.
 
 
 ## Review: Workshop 1 Topics:
@@ -41,7 +97,17 @@ Today, we'll be continuing our dive into R skills. More specifically, we'll be m
 > ####  4.3 Scatter Plots
 
 
+The Workshop 1 material was about the language itself: how R stores values, how
+loops and conditions work, and how to lay out a script so another person can
+read it. That material is base R, meaning it ships with R and needs no packages.
 
+Sections 3 and 4 are different in kind. `dplyr` and `ggplot2` are packages. They
+do not add anything R could not already do; they add a consistent vocabulary for
+doing it. In base R, keeping the rows of a data frame `df` where column `Food`
+exceeds 100 looks like `df[df$Food > 100, ]`. In `dplyr` it is
+`filter(df, Food > 100)`. The second is a few characters longer and far easier
+to read, and once you know the pattern it transfers to every other verb in the
+package.
 
 
 
@@ -49,15 +115,52 @@ Today, we'll be continuing our dive into R skills. More specifically, we'll be m
 
 ### 3.1 What is the Tidyverse?
 
+R ships with a few thousand functions. Everything else lives in packages that
+other people wrote and published. A package has to be *installed* once per
+machine (it downloads files onto your hard drive) and *loaded* once per R
+session (it makes its functions visible to your code).
+
+`install.packages("dplyr")` installs. `library(dplyr)` loads. Running
+`library()` on a package you never installed is an error; running
+`install.packages()` every time you knit is slow and rude to the mirror server.
+`pacman::p_load()` folds the two into one call: it checks whether each package
+is already installed, installs the missing ones, then loads all of them.
+
+The `::` in `pacman::p_load` means "the `p_load` function from the `pacman`
+package". Writing it that way lets you call a function without loading the whole
+package, and it makes the source of the function obvious to a reader.
+
 ```{r}
 # p_load() installs a package only if it is missing, then loads it.
 pacman::p_load(tidyverse, here, skimr)
 
 ```
 
+Three things arrived in that one line:
+
+- `tidyverse` is a *meta-package*. Loading it loads `dplyr` (data manipulation),
+  `ggplot2` (plots), `readr` (reading files), `tibble` (a modern data frame),
+  `tidyr` (reshaping), `stringr` (text), `forcats` (factors) and `purrr`
+  (iteration). The startup message lists them, and it also lists *conflicts*:
+  `dplyr::filter()` masks `stats::filter()`, so from here on a plain `filter()`
+  means the `dplyr` one.
+- `here` builds file paths that work no matter which sub-folder you are sitting
+  in. Section 3.2 uses it.
+- `skimr` produces a compact summary of a whole data frame.
+
 The "Tidyverse" is a collection of R packages designed to work together seamlessly and follow a consistent set of principles for data manipulation and analysis. It provides a cohesive and powerful toolkit for data cleaning, transformation, visualization, and modeling, and is the "industry standard" for many data operations in R.
 
 `Dplyr` is one of the core packages within the Tidyverse. It offers a simple, consistent approach to doing all your basic data tidying operations.
+
+The shared principle worth naming now is **tidy data**. A table is tidy when
+
+1. each row is one observation,
+2. each column is one variable,
+3. each cell is one value.
+
+Our CPI file is not tidy when it arrives: the years run across the top as column
+headers, so a single row mixes 23 different observations. Section 3.2 fixes
+that, and the fix is most of the reason that import chunk is so long.
 
 ### 3.2 5+1 functions
 
@@ -79,8 +182,29 @@ and,
 
 The first five do various operations, such as subsetting and altering your data. `group_by()` is separated, because while it's almost never used alone, it augments the other functions and adds a whole new dimension of use.
 
+All six share one contract. Learning it once saves you from six separate sets of
+rules:
+
+- The **first argument is always a data frame**. That is what makes them
+  chainable with the pipe in Section 3.6.
+- Later arguments refer to **column names without quotes**. Inside
+  `filter(food_cpi, Food > 100)`, the bare word `Food` means "the column called
+  Food in `food_cpi`". Outside the function, typing `Food` on its own is an
+  error, because no object of that name exists in your workspace. This behavior
+  is called *data masking*, and it is the most common source of confusion for
+  people arriving from Python.
+- They **return a new data frame and never modify the one you passed in**. That
+  is worth demonstrating rather than asserting, which we do as soon as the data
+  is loaded.
+
 Before we get to the commands themselves, we need to import our data. I'll set this up in one cell; a few of these commands will be seen again later.
 
+
+The next chunk re-loads four packages that `tidyverse` already loaded above. It
+is redundant, and it is harmless: loading a package a second time does nothing.
+It is kept because it documents which package each function in the import chunk
+comes from - `read_csv` from `readr`, `here` from `here`, `mutate` and `rename`
+from `dplyr`, `as_tibble` from `tibble`.
 
 ```{r}
 library(readr)
@@ -88,6 +212,42 @@ library(here)
 library(dplyr)
 library(tibble)
 ```
+
+The import chunk transposes the raw file. Transposing means flipping rows and
+columns, and it is easier to see on a table small enough to print whole:
+
+```{r}
+# A toy table in the same shape as the raw CPI file: one row per product group,
+# one column per year. Backticks are needed around names that start with a
+# digit, because 2000 on its own is a number, not a name.
+transpose_demo <- tibble(
+  group  = c("A", "B"),
+  `2000` = c(1, 2),
+  `2001` = c(3, 4)
+)
+
+transpose_demo
+
+# t() is base R's transpose. Rows become columns, columns become rows.
+t(transpose_demo)
+```
+
+Two things to notice in the transposed output. First, the year labels `2000` and
+`2001` are no longer column names; they have become *row names*, printed down
+the left edge. Second, every value is now in quotation marks. `t()` returns a
+**matrix**, and a matrix holds exactly one type of value throughout. Mixing the
+text `"A"` with the number `1` forces the whole thing to text. Both facts drive
+the code in the import chunk: it has to recover the years from the row names,
+and it has to convert the numbers back from text.
+
+Two lines in the import chunk use `%>%`, the pipe. Section 3.6 covers it
+properly. For now, read `x %>% f(y)` as `f(x, y)`: the thing on the left becomes
+the first argument of the function on the right. So
+`cpi_t %>% mutate(Year = year_col)` is the same call as
+`mutate(cpi_t, Year = year_col)`.
+
+Now the real import. Read it once top to bottom, then read the commentary that
+follows it.
 
 ```{r}
 # The shared data folder sits at the top level of the repository. here() anchors
@@ -136,9 +296,122 @@ cpi_t <- cpi_t %>%
 
 cpi_t
 ```
+
+#### Walking through the import
+
+**The path.** `here()` builds an absolute file path starting from the root of
+your project. It finds that root by walking up from the current folder until it
+sees a marker file. In this repository the marker is `r/r.Rproj`, so `here()`
+resolves to the `r` folder, and `here("..", "data")` resolves to the `data`
+folder next to it at the repository top level. The `".."` means "go up one
+level", exactly as in a file explorer.
+
+The `if (!dir.exists(data_dir))` line is a guard. `dir.exists()` returns `TRUE`
+or `FALSE`, and `!` flips it. The sentence reads: if that folder is *not* there,
+use `here("data")` instead, which is the right answer when somebody opens the
+project at the repository root rather than at `r/`. Path problems are the most
+common reason a classmate's notebook fails to run on your machine. Never write
+`read_csv("C:/Users/yourname/Desktop/food_cpi.csv")`. That path exists on
+exactly one computer in the world.
+
+`file.path()` glues folder and file names together with the right separator for
+your operating system, which is why it beats pasting a `"/"` in yourself.
+
+**Reading.** `read_csv()` is `readr`'s CSV reader. It returns a **tibble**: a
+data frame with better printing and no surprise type conversions. The
+`show_col_types = FALSE` argument suppresses the block of text that otherwise
+reports every column's guessed type. We suppress it only because the data gets
+restructured immediately.
+
+**Transposing.** `t(cpi)` gives a character matrix, exactly as in the toy
+example. Here is the raw file's shape before the flip:
+
+```{r}
+# First four columns of the raw import: product groups down the side, years
+# across the top. This is the untidy layout described in Section 3.1.
+cpi[, 1:4]
+```
+
+Each row is a product group and each column is a year, so one row holds 23
+separate observations. After `t()`, each row is a year and each column is a
+product group, which is what we want.
+
+**Recovering the header.** `cpi_t[1, ]` is the first row of the matrix, which
+after transposing holds the product-group names. Square brackets are R's
+subsetting operator, and inside them the order is always `[rows, columns]`;
+leaving one side blank means "all of them". `colnames(cpi_t) <- ...` writes
+those names onto the matrix, and `cpi_t <- cpi_t[-1, ]` then deletes that row. A
+negative index in R means "everything except this", not "count from the end" as
+it does in Python.
+
+**Recovering the years.** `row.names(cpi_t)` pulls the row labels, which are the
+year strings, into a character **vector** called `year_col`. A vector is R's
+most basic data structure: an ordered sequence of values that all share one
+type. A data frame is, underneath, a list of equal-length vectors.
+
+**Back to a tibble.** `as_tibble()` converts the matrix into a tibble. Row names
+are dropped in the process, which is why `year_col` had to be saved first, and
+why the next line puts it back as a real column using `mutate()`.
+
+**Renaming.** The Statistics Canada column names carry footnote markers
+(`"Food 5"`, `"Energy 7"`) plus spaces and commas. Names like that have to be
+wrapped in backticks every time you use them. `rename()` takes pairs in the form
+`new_name = "old_name"` and returns a tibble with the names swapped. The bare
+`colnames(cpi_t)` line then prints the result so you can check the rename worked
+before going further.
+
+**Fixing the types.** Everything is still text at this point, a side effect of
+`t()`. `mutate(across(everything(), as.numeric))` fixes it. `across()` applies
+one function to many columns, `everything()` selects all of them, and
+`as.numeric` converts text to numbers. Note that `as.numeric` is passed *without*
+parentheses: we are handing `across()` the function itself, not the result of
+calling it.
+
+Reading the printed tibble at the bottom: the header line says
+`# A tibble: 23 x 16`, meaning 23 rows and 16 columns. Under each column name is
+its type, `<dbl>` for double-precision numbers. Tibbles print only the first ten
+rows by default, and the footer names the columns that did not fit on screen.
+
+#### The verbs do not modify your data
+
+This is the point most easily missed, and missing it costs people hours later.
+
+```{r}
+# select() returns a NEW tibble with two columns...
+select(cpi_t, Year, Food)
+
+# ...but cpi_t itself is untouched: still 16 columns.
+ncol(cpi_t)
+```
+
+The result of `select()` was printed and then thrown away, because it was never
+assigned to anything. `cpi_t` still has all 16 columns. To keep a result you
+must assign it: `small <- select(cpi_t, Year, Food)`. Coming from Python, the
+trap is expecting something like an in-place method. There is none here.
+
+`glimpse()` is a compact structural summary: one line per column, showing the
+name, the type, and the first few values. Use it when a data frame is too wide
+to print.
+
 ```{r}
 dplyr::glimpse(cpi_t)
 ```
+
+Read it as a rotated preview. `$ Year <dbl> 2000, 2001, 2002, ...` says there is
+a column named `Year`, it holds doubles, and it starts at 2000. Sixteen lines of
+output means sixteen columns.
+
+`class()` and `typeof()` both describe a column, but they answer different
+questions. `typeof()` reports how R stores the value in memory: `"double"`,
+`"integer"`, `"character"`, `"logical"`, `"list"`. `class()` reports how R
+should *treat* it: `"numeric"`, `"character"`, `"factor"`, `"Date"`. They often
+agree, and when they disagree the difference is informative. A date has class
+`"Date"` and type `"double"`, because R stores dates as a count of days since
+1970-01-01.
+
+`sapply(df, f)` applies the function `f` to every column of `df` and returns the
+answers as a named vector. It is base R's version of the `across()` idea.
+
 ```{r}
 # Class (factor, character, numeric, Date, etc.)
 sapply(cpi_t, class)
@@ -147,11 +420,37 @@ sapply(cpi_t, class)
 sapply(cpi_t, typeof)
 
 ```
+
+Every column reports class `numeric` and type `double`, which confirms the
+`as.numeric` conversion reached all 16 columns. Had any column been left as
+`"character"`, arithmetic on it would fail later with the error "non-numeric
+argument to binary operator".
+
+One class you will meet constantly, and that is absent here: a **factor** is R's
+type for a categorical variable with a fixed set of allowed values, called its
+*levels*. Underneath, a factor is stored as integer codes plus a lookup table of
+labels, which is why `class()` says `"factor"` while `typeof()` says
+`"integer"`. Factors matter because `ggplot2` uses level order to decide the
+order of bars and legend entries, and because regression functions turn factors
+into dummy variables automatically. We build one in Section 3.6.
+
+`skim()` from `skimr` is a fuller report: how many rows and columns, how many
+missing values per column, and the mean, standard deviation, quantiles and a
+small text histogram for every numeric column.
+
 ```{r}
 # skimr was loaded in the first chunk of this notebook.
 skimr::skim(cpi_t)
 
 ```
+
+Read `n_missing` first (zero everywhere here, so nothing is missing yet) and
+`complete_rate` next (1.00, the same fact as a proportion). After that, `p0` and
+`p100` are the minimum and maximum and `p50` is the median. Compare `Gasoline`
+with `Clothing_and_footwear`: gasoline runs from about 100 to 247 across the
+sample while clothing barely moves and spends most of the period below its 2002
+base of 100. That spread is why economists rarely quote a single inflation
+number without saying which basket it refers to.
 
 ### 3.3 `select()`
 
@@ -160,6 +459,12 @@ skimr::skim(cpi_t)
 As you can see, `cpi_t` has a lot of non-food columns. We don't want those. We'll select just `"Year"`, `"Food"`, and `"All_items_but_food_energy"` (the names we assigned in the import chunk above), leaving out the others, calling this `food_cpi`
 
 The generic R function `colnames()` is useful here, in case we need to alter our selection.
+
+Column names can be given bare (`Year`) or quoted (`"Year"`). Both work in
+`select()`. Bare names are the tidyverse convention; quotes are needed only when
+a name contains spaces or starts with a digit, and even then backticks are the
+usual choice. The code below uses quotes, which is perfectly valid and slightly
+more defensive.
 
 ```{r}
 colnames(cpi_t)
@@ -171,6 +476,10 @@ food_cpi <- select(cpi_t, "Year", "Food", "All_items_but_food_energy")
 food_cpi
 ```
 
+The result is a new tibble with 23 rows and 3 columns, assigned to `food_cpi`.
+Column order in the output follows the order you named them, not the order they
+had in `cpi_t`, so `select()` doubles as a reordering tool.
+
 #### Exercise (`select()`)
 
 Create new dataframes as I did above, each including the `"Year"` column and a selection of others:
@@ -179,6 +488,11 @@ Create new dataframes as I did above, each including the `"Year"` column and a s
 -   `consumables_cpi`, including any goods which are consumed quickly (like food, energy, etc)
 -   `durables_cpi`, including any goods which *aren't* consumed quickly (like clothing, transport, etc)
 -   `services_cpi`, including any items which are primarily services performed by a person
+
+These three tibbles are used again later, `durables_cpi` and `services_cpi` in
+Exercises 2 and 3 of Section 4.2, so run this chunk even if you would have
+grouped the categories differently. The `library(dplyr)` call at the top is
+another harmless repeat.
 
 ```{r}
 library(dplyr)
@@ -198,6 +512,11 @@ services_cpi
 
 ```
 
+Three chunks of output, one per tibble, because a bare object name on its own
+line prints that object. Note that the classification is a judgment call, not a
+fact: `Shelter` is grouped with durables here, but rent is arguably a service.
+Say what you did and why, and be consistent.
+
 Now try something new. If you call `everything()` inside of a `select()` statement, it'll return all columns specified up to that point, then all remaining columns after it.
 
 Move `Year` to the left of the dataset by using `select()` with `Year` and `everything()`
@@ -207,6 +526,26 @@ Move `Year` to the left of the dataset by using `select()` with `Year` and `ever
 select(cpi_t, Year, everything())
 ```
 
+`Year` is now the first column and the other 15 follow in their original order.
+`everything()` is one of the *tidyselect helpers*, a small family of functions
+that pick columns by pattern instead of by name. The others you will use most:
+
+```{r}
+# starts_with(): every column whose name begins with this text
+names(select(cpi_t, starts_with("All")))
+
+# contains(): every column whose name contains this text anywhere.
+# Matching is case-insensitive by default, so "energy" also finds "Energy".
+names(select(cpi_t, contains("energy")))
+
+# a leading minus sign drops columns instead of keeping them
+names(select(cpi_t, -Gasoline, -Energy))
+```
+
+Use explicit names when the selection is short and stable, and helpers when the
+selection is long or when new columns with the same naming pattern might arrive
+later. `names()` and `colnames()` return the same thing for a data frame; the
+calls above are wrapped in `names()` only to keep the printed output short.
 
 ```{r}
 cpi_t
@@ -230,6 +569,19 @@ select(cpi_t, Food)
 
 ```
 
+The header says `# A tibble: 23 x 1`, so the answer is that it stays a tibble.
+`select()` always returns a data frame, even a one-column one. That consistency
+is deliberate: it means the next verb in a chain always receives what it
+expects. When you actually want the bare numbers, use `pull()` or `$`:
+
+```{r}
+class(select(cpi_t, Food))  # tibble
+class(pull(cpi_t, Food))    # numeric vector
+class(cpi_t$Food)           # numeric vector, base R version of pull()
+```
+
+Reach for `pull()` or `$` when you need to feed a single column to something
+that wants a vector, such as `mean()` or `plot()`.
 
 ```{r}
 cpi_t
@@ -243,6 +595,55 @@ The `mutate()` function is a tool for performing calculations or transformations
 Our datasets contain the Consumer Price Indices for various types of goods. To transform these into inflation percentages, we'll need to subtract the previous year's value, then divide by it.
 
 The `lag()` function is used with a data column: you input this column, and it moves each entry "down" one row. Our data goes from 2000 onwards, so the 2000 value is moved to 2001, 2001 to 2002, etc. The first year doesn't have a prior value, so this is filled with an `NA`.
+
+`NA` is R's marker for a missing value. It is not zero and not an empty string.
+Any arithmetic involving `NA` returns `NA`, which is the correct and honest
+answer: if you do not know last year's price, you cannot know this year's growth
+rate.
+
+Before the calculation, look at what `lag()` actually does. The chunk below
+builds a two-column comparison and plots both series.
+
+```{r}
+# select() keeps Year and Food; mutate() adds the shifted copy next to it.
+lag_demo <- food_cpi %>%
+  select(Year, Food) %>%
+  mutate(Food_lagged = lag(Food))
+
+# head() prints the first n rows. The 2000 row shows the NA that lag() creates.
+head(lag_demo, 4)
+```
+
+Row by row: in 2001 the `Food` column holds 97.4 and `Food_lagged` holds 93.3,
+which is 2000's value. `lag()` has not changed any number; it has moved the
+whole column down by one row and filled the gap at the top with `NA`.
+
+```{r}
+# pivot_longer() stacks the two columns into one, adding a "series" column that
+# records which one each value came from. ggplot2 wants data in this long shape
+# when you plot several series with one geom.
+lag_demo_long <- lag_demo %>%
+  pivot_longer(
+    cols      = c(Food, Food_lagged),  # which columns to stack
+    names_to  = "series",              # new column holding the old column names
+    values_to = "index_value"          # new column holding the values
+  )
+
+ggplot(lag_demo_long, aes(x = Year, y = index_value, color = series)) +
+  geom_line(na.rm = TRUE) +            # na.rm = TRUE: drop the 2000 NA quietly
+  geom_point(size = 1.5, na.rm = TRUE) +
+  labs(
+    title = "Fig. 0: What lag() does to a column",
+    x     = "Year",
+    y     = "Food CPI (2002 = 100)",
+    color = "Series"
+  )
+```
+
+The two lines have identical shape; the lagged one is the same curve shifted one
+year to the right, and it starts in 2001 rather than 2000 because its first
+value is `NA`. The vertical distance between the two lines at any year is
+exactly `food_change` for that year, which is what the next chunk computes.
 
 ```{r}
 food_cpi_mutate <- mutate(food_cpi, 
@@ -260,9 +661,42 @@ food_cpi_mutate <- mutate(food_cpi,
 food_cpi_mutate
 ```
 
+The percentage formula deserves a slow reading, because the brackets are doing
+real work.
+
+`food_change_percent = 100 * (food_change) / lag(Food)`
+
+- `food_change` was created two lines earlier, in the same `mutate()` call. That
+  is allowed and useful: `mutate()` evaluates its arguments in order, so a new
+  column can be used by any column defined after it. Written out, `food_change`
+  is `Food - lag(Food)`, this year's index minus last year's.
+- Dividing by `lag(Food)` makes it a proportion *of last year's level*. The
+  denominator is last year, not this year. Using `Food` as the denominator would
+  be a different and less standard quantity.
+- Multiplying by 100 turns the proportion into percent. The whole expression is
+  read left to right for multiply and divide, so `100 * (food_change) / lag(Food)`
+  computes `(100 * food_change) / lag(Food)`, which is the same number as
+  `100 * (food_change / lag(Food))`.
+
+Where students go wrong is dropping the brackets around the numerator. Writing
+`100 * Food - lag(Food) / lag(Food)` is valid R and completely wrong: `/` binds
+tighter than `-`, so R computes `(100 * Food) - (lag(Food) / lag(Food))`, which
+is 100 times the price index minus 1. Check the magnitude of your first result.
+An inflation rate of 9000 percent means you lost a bracket.
+
+Reading the output: 2022 shows `food_change` of 14.0 index points and
+`food_change_percent` of 8.89 percent, against an `All_items_change_percent` of
+4.96 percent. That single row drives most of the visual argument in Section 4.
+
 As you can see, `mutate()` creates new variable columns. You specify a new column name, like we did with `food_change`, and make it equal to a number, value, or calculation. This can include arithmetic operations, like addition (+), subtraction (-), multiplication (\*) and division (/). You can also take exponents, and do a whole range of other operations for other data types.
 
 Sticking to just numeric data as we are, the arithmetic operations give us a solid base to work with.
+
+One more property worth stating plainly: these operations are *vectorized*.
+`Food - lag(Food)` is not a loop over 23 rows that you have to write; R applies
+the subtraction element by element across both vectors at once and returns a
+vector of 23 answers. Almost every arithmetic operation in R behaves this way,
+and code that uses it is both shorter and faster than the equivalent `for` loop.
 
 ##### Note:
 
@@ -271,6 +705,19 @@ The variables we created involving a `lag()` all start with a `NA` value - for t
 In some analyses, you'd drop the first row to have a consistent dataset with full coverage. Since we're still interested in 2000's CPI values, we're going to leave it. However, when we do operations involving these columns, we'll have to use a special method to tell R to ignore these values.
 
 We'll cross that bridge when we come to it.
+
+```{r}
+# How many missing values did the lag introduce? One per lagged column.
+sum(is.na(food_cpi_mutate$food_change))
+
+# And what a summary statistic does about it if you say nothing:
+mean(food_cpi_mutate$food_change)
+```
+
+`is.na(x)` returns `TRUE`/`FALSE` for each element, and `sum()` counts the
+`TRUE`s because `TRUE` counts as 1. One missing value, as expected. The `mean()`
+call returns `NA`, not an error and not a number: R refuses to guess. Section
+3.7 shows the fix.
 
 #### Exercise (`mutate()`)
 
@@ -300,6 +747,18 @@ consumables_cpi_mutate
 
 ```
 
+This version writes `Gasoline - lag(Gasoline)` out again in the percentage line
+rather than reusing `gasoline_change`. Both styles work. Reusing the earlier
+column is shorter and keeps the two definitions in sync if you edit one;
+repeating the expression makes each line readable on its own. Pick one and stay
+with it inside a single project.
+
+Gasoline is the series to look at here. Its percentage change runs from minus
+17.5 percent in 2009 to plus 31.2 percent in 2021, and it changes sign seven
+times over 22 years. Food never moved more than 8.9 percent in a year and never
+fell at all. Energy prices are volatile in a way food prices are not, which is
+part of why Statistics Canada publishes an "excluding food and energy" series in
+the first place.
 
 You can use the `transmute()` function to create new variables, and keep only these. Create a new dataframe, `real_cpis` using transmute. Create the following real price indices:
 - `real_food` equal to `Food` divided by `All_items`
@@ -324,6 +783,25 @@ real_cpis
 
 ```
 
+`transmute()` is `mutate()` plus a `select()` of only the new columns. `Year`
+appears in the output because it is listed as a bare column name inside the
+call; without it, the years would be gone.
+
+Economically, dividing a component index by the all-items index gives a *relative
+price*: the price of that good measured in units of the average consumption
+basket. Both series share the same 2002 base of 100, so every ratio equals
+exactly 1 in 2002, and a value above 1 means that good has grown more expensive
+than the basket since then. `real_food` sits at or just below 1 through 2006, exactly 1 in the 2002 base
+year, crosses
+above it in 2007, and reaches 1.13 by 2022, so food has outpaced general
+inflation over the sample without doing so every single year. `real_gas` is far
+more erratic: 1.44 in 2008, back to 1.07 in 2020, then 1.64 in 2022. Relative
+prices are not trends; they move whenever one component moves faster than the
+basket, in either direction.
+
+A note on the function itself: `transmute()` has been superseded in current
+`dplyr`, meaning it still works and is not going away, but the documentation now
+points to `mutate(.keep = "none")` instead. Both produce the same result here.
 
 
 ### 3.5 `filter()`
@@ -333,6 +811,21 @@ The filter() function in dplyr lets you extract subsets of data based on specifi
 You feed in a dataframe, and a condition to apply to one or more columns. It returns only the rows which meet said requirement. Hence, it's a `filter()`.
 
 `select()` has a similar effect, just focused on columns. However, most datasets will have more (sometimes many, many more) rows than columns; naming them individually will rapidly become impractical. Instead, we'll create "boolean conditions", logical statements returning `TRUE` or `FALSE`. `filter()` will keep only rows for which this value comes up as `TRUE`.
+
+The comparison operators that produce those conditions:
+
+| Operator | Meaning                  |
+|----------|--------------------------|
+| `>`      | greater than             |
+| `>=`     | greater than or equal to |
+| `<`      | less than                |
+| `<=`     | less than or equal to    |
+| `==`     | equal to                 |
+| `!=`     | not equal to             |
+
+The one that catches everybody is `==`. A single `=` is assignment, not
+comparison. `filter(df, Year = 2020)` is an error; `filter(df, Year == 2020)` is
+the test you meant.
 
 ```{r}
 food_cpi_mutate
@@ -344,6 +837,11 @@ filter(food_cpi_mutate, Food>100.0)
 
 ```
 
+20 of the 23 rows survive. `Food > 100` is evaluated once per row, producing a
+vector of 23 `TRUE`/`FALSE` values, and `filter()` keeps the rows where the
+answer is `TRUE`. The three dropped years are 2000, 2001 and 2002, the years
+before and at the 2002 base of the index.
+
 ```{r}
 #compare Food col values which are less than the value of all_items....
 
@@ -352,10 +850,19 @@ filter(food_cpi_mutate, Food<All_items_but_food_energy)
 
 ```
 
+Three rows: 2000, 2003 and 2004. A condition does not have to compare a column
+to a constant. Here both sides are columns, so the comparison is made row by
+row. These are the only years in which the food index sat below the
+food-and-energy-excluded index, and after 2004 food never falls back below it.
 
 ```{r}
 food_cpi_mutate$food_change
 ```
+
+`$` extracts one column as a plain vector, which is why this prints as a run of
+numbers rather than a table. The leading `NA` is the 2000 value, and this is a
+useful habit: when a filter behaves strangely, print the raw column and look for
+`NA`s.
 
 Let's get just the years with a really high increase in food prices, like 4% or more.
 
@@ -366,7 +873,48 @@ high_inflation
 
 ```
 
+Three years clear the 4 percent bar: 2001, 2009 and 2022. Note what happened to
+the 2000 row. Its `food_change_percent` is `NA`, so the condition evaluates to
+`NA` rather than `TRUE` or `FALSE`, and `filter()` drops any row whose condition
+is not definitely `TRUE`. That is a deliberate design choice and a common source
+of quietly shrinking data frames. If you want to keep the missing rows, say so
+explicitly with `filter(df, is.na(x) | x > 4)`.
+
 As you can see, `filter()` works by us passing in a dataframe (`food_cpi_mutate`), and then naming a column (`food_change_percent`) as part of a boolean condition. In our case, `food_change_percent > 4.0` returns TRUE for all rows where we have a greater than 4% inflation in food prices; `filter()` then creates a dataframe with just these values in it.
+
+Filtering is easier to trust when you can see which rows went and which stayed.
+The chunk below labels every row with its fate and then plots all of them.
+
+```{r}
+# case_when() checks conditions in order and returns the value after the ~ for
+# the first one that matches. The order matters: the is.na() test has to come
+# first, because NA > 4 is NA rather than FALSE and would fall through.
+filter_demo <- food_cpi_mutate %>%
+  mutate(status = case_when(
+    is.na(food_change_percent)  ~ "no value (NA)",
+    food_change_percent > 4     ~ "kept by filter()",
+    TRUE                        ~ "dropped by filter()"
+  ))
+
+ggplot(filter_demo, aes(x = Year, y = food_change_percent, fill = status)) +
+  # geom_col() draws one bar per row, with height equal to y.
+  geom_col(na.rm = TRUE) +
+  # The dashed line is the threshold used in the filter() call above.
+  geom_hline(yintercept = 4, linetype = "dashed") +
+  labs(
+    title = "Fig. 0b: Which rows survive filter(food_change_percent > 4)",
+    x     = "Year",
+    y     = "Food CPI change (percent)",
+    fill  = "Row status"
+  )
+```
+
+Three bars cross the dashed line at 4 percent, and those are exactly the three
+rows `filter()` returned: 2001, 2009 and 2022. Every bar below the line was
+dropped. The year 2000 has no bar at all, because its value is `NA` and
+`na.rm = TRUE` told `geom_col()` to leave it out rather than warn about it. That
+missing bar is the visual form of the rule stated above: a row with `NA` in the
+filtered column is dropped, not kept.
 
 #### Exercise (`filter()`)
 
@@ -405,6 +953,20 @@ Now you've learned how to filter with multiple conditions. By default, `filter(d
 
 You can also join conditions with `|`, meaning *OR*. As long as one of these evaluates as TRUE, the overall statement will evaluate as TRUE, and you'll return the row.
 
+The three logical operators, and what they do to a pair of `TRUE`/`FALSE`
+values:
+
+| Expression | Result |
+|------------|--------|
+| `TRUE & TRUE` | `TRUE` |
+| `TRUE & FALSE` | `FALSE` |
+| `TRUE \| FALSE` | `TRUE` |
+| `FALSE \| FALSE` | `FALSE` |
+| `!TRUE` | `FALSE` |
+
+`&` is AND, `|` is OR, `!` is NOT. AND makes a filter stricter and returns fewer
+rows; OR makes it looser and returns more.
+
 ```{r}
 food_cpi_mutate
 ```
@@ -426,12 +988,36 @@ filter(food_cpi_mutate, (food_change < All_items_change) | (food_change > 1))
 
 ```
 
+The contrast is the whole lesson. The `&` version returns 3 rows: 2002, 2003 and
+2016, the only years where food rose more than one index point *and* still rose
+by less than the all-items series. The `|` version returns 22 rows, everything
+except 2000, because almost every year satisfies at least one of the two
+conditions and 2000 satisfies neither (both of its inputs are `NA`).
+
+The brackets around each condition are not required by R, which already gives
+`<` and `>` higher precedence than `&`. They are there because a reader should
+not have to remember the precedence table to check your work.
 
 You *can* link a large number of conditions together. If this was a Mathematical Proof class, I might have you figure out something like `"Condition_A | Condition_B & (Condition_C & Condition_D) | Condition_E"` where A, B, and E are TRUE while C and D are FALSE.
 
 
 
 But this isn't a Proofs class, so we can enjoy ourselves instead, and move onto the `arrange()` function. 
+
+Two shorthands worth knowing before we leave `filter()`, because they save
+brackets in exactly the situations that generate bugs:
+
+```{r}
+# between(x, lo, hi) is equivalent to (x >= lo) & (x <= hi), inclusive at both ends
+filter(food_cpi_mutate, between(Year, 2010, 2012))
+
+# %in% tests membership in a set, and replaces a chain of == joined by |
+filter(food_cpi_mutate, Year %in% c(2008, 2009, 2022))
+```
+
+Use `between()` for a numeric range and `%in%` for a list of allowed values.
+Writing `Year == 2008 | Year == 2009 | Year == 2022` gives the same three rows
+and is three times as easy to typo.
 
 
 
@@ -446,11 +1032,27 @@ arrange(food_cpi_mutate, food_change_percent)
 
 It returns your dataframe, ordered by the specified column. By default, in Ascending order (lowest to greatest).
 
+`NA` sorts to the bottom regardless of direction. `arrange()` is the one verb
+that does not drop missing values, it parks them at the end. So 2000 is still
+there, at the very bottom of the object, even though its `food_change_percent`
+is unknown. Note that the tibble prints only the first 10 of 23 rows and ends
+with `# i 13 more rows`, so you will not see 2000 on screen here. Run
+`tail(arrange(food_cpi_mutate, food_change_percent))` to bring it into view.
+
+The smallest actual value is 2017 at 0.07 percent, a year in which the food
+index moved from 142.6 to 142.7. The row order changed; nothing else did.
+`arrange()` never adds, removes or alters a value.
+
 By wrapping the column in `desc()`, you can get Descending order (greatest to lowest).
 
 ```{r}
 arrange(food_cpi_mutate, desc(food_change_percent))
 ```
+
+2022 is on top at 8.89 percent, followed by 2009 at 4.93 and 2001 at 4.39. Those
+are the same three years `filter(food_change_percent > 4)` returned in Section
+3.5, which is a useful cross-check: sorting and filtering should agree with each
+other.
 
 You can also arrange by multiple columns; it prioritizes by column order. So, `arrange(df, col1, col2)` will be arranged first in ascending order of `col1`, but wherever rows have the same `col1` value, ties are broken by `col2`
 
@@ -460,14 +1062,29 @@ arrange(food_cpi_mutate, food_change_percent, food_change)
 
 With continuous data such as ours, there are very rarely ties to be broken, so arranging by `food_change_percent` and `food_change` works out the same as just arranging by `food_change_percent`.
 
+Second sort keys earn their keep on categorical data. `arrange(df, decade, desc(Food))`,
+once `decade` exists in Section 3.8, would list the decades in order and put the
+highest-priced year first inside each one. That is a common way to lay out a
+results table before exporting it.
+
 
 ### 3.6 b) Ceci n'est pas une pipe
 
 `arrange()` combos nicely with `slice()`. First, arrange a dataframe, then get the top X number of rows by using `slice(df, 1:X)`.
 
+`slice()` selects rows by position, not by value. `1:5` is R's way of writing the
+sequence 1, 2, 3, 4, 5, so `slice(df, 1:5)` returns the first five rows of
+whatever it is handed. It has no idea what "top" means; the sorting is what makes
+the first five rows the top five.
+
 Or better yet, start using `%>%`, also known as "pipes". Pipes are a tool that lets you easily chain multiple steps, passing the output of one function to the next step for further analysis. 
 
 Pipes do not come in basic R, but are imported with the TidyVerse.
+
+The mechanical rule is short: **`x %>% f(y)` is rewritten by R as `f(x, y)`.**
+The value on the left is inserted as the *first* argument of the function on the
+right. That is exactly why every `dplyr` verb takes a data frame first. The
+design of the verbs and the design of the pipe are the same decision.
 
 ```{r}
 # good syntax
@@ -478,6 +1095,11 @@ food_cpi_mutate %>%                         # takes food_cpi_mutate and passes i
 ```
 
 As you see, this starts with a dataframe, then "pipes" it into `arrange(desc(food_change_percent))`, and then pipes that result into `slice(1:5)`
+
+Note that neither `arrange()` nor `slice()` names a data frame anywhere in that
+chain. Each one receives it from the pipe. Note also that nothing was assigned,
+so `food_cpi_mutate` is unchanged and the five-row result was printed and
+discarded. To keep it: `top_5 <- food_cpi_mutate %>% arrange(...) %>% slice(1:5)`.
 
 Compare it with
 
@@ -508,6 +1130,78 @@ function_3(function_2(function_1(dataframe, argument_a), argument_b, argument_c)
 
 The second statement is *far* more difficult to read, particularly with the function arguments added. 
 
+There is a practical reason beyond readability. To debug the piped version you
+delete the last `%>%` line and re-run, and you see the intermediate result. To
+debug the nested version you have to count brackets. On a five-step chain, that
+difference is the difference between finding a bug in ten seconds and in ten
+minutes.
+
+Three details about pipes that come up constantly:
+
+- **Where the `%>%` goes.** It must end the line, not start the next one. R
+  reads line by line and treats a line that looks complete as complete, so a
+  leading `%>%` produces a syntax error.
+- **The native pipe.** Since R 4.1 the language itself has a pipe, written `|>`,
+  which needs no package. For plain `x |> f()` calls it behaves the same as
+  `%>%`, and this document uses `%>%` throughout because that is what almost all
+  existing tidyverse code uses.
+- **Placing the value somewhere other than first.** With `%>%` a dot `.` stands
+  for the piped value, so `x %>% lm(Food ~ Year, data = .)` works. You will need
+  this for any function whose first argument is not the data.
+
+```{r}
+# All three lines do the same thing.
+nrow(food_cpi_mutate)
+food_cpi_mutate %>% nrow()
+food_cpi_mutate |> nrow()
+```
+
+The top five years are easier to compare as bars than as a table.
+
+```{r}
+top_5_food <- food_cpi_mutate %>%
+  arrange(desc(food_change_percent)) %>%
+  slice(1:5)
+
+ggplot(top_5_food,
+       aes(x = fct_reorder(factor(Year), food_change_percent),
+           y = food_change_percent)) +
+  geom_col(fill = "steelblue") +
+  # coord_flip() swaps the axes so the year labels read horizontally.
+  coord_flip() +
+  labs(
+    title = "Fig. 0c: Five largest yearly increases in the food CPI",
+    x     = "Year",
+    y     = "Food CPI change (percent)"
+  )
+```
+
+2022 is roughly twice the size of the second-largest year, 2009, and the fourth
+and fifth bars are almost the same height. A ranked table hides that shape; the
+bar chart makes it obvious that "top five" here means one extreme year plus four
+ordinary ones.
+
+The x aesthetic in that plot is worth unpacking, because it is the first factor
+in this document. `Year` is numeric, and `geom_col()` on a numeric x axis draws
+bars at numeric positions and sorts them by year. We want them sorted by size.
+`factor(Year)` converts the years to a categorical variable, whose *levels* are
+the allowed categories in the order `ggplot2` will draw them; by default that
+order is alphabetical. `fct_reorder(f, x)` then reorders the levels of `f` by
+the values of `x`, so the levels run from smallest percentage change to largest,
+and `coord_flip()` puts the largest at the top.
+
+An alternative to `arrange() %>% slice()` for exactly this job:
+
+```{r}
+# slice_max() sorts and slices in one step. n = 5 asks for five rows.
+slice_max(food_cpi_mutate, food_change_percent, n = 5) %>%
+  select(Year, food_change_percent)
+```
+
+Use `slice_max()` or `slice_min()` when all you want is the top or bottom few
+rows; use `arrange()` when the sorted order of the whole table matters, for
+instance because you are about to print or export it.
+
 #### Exercise (`arrange()`, `%>%`)
 
 ```{r}
@@ -534,6 +1228,11 @@ The second statement is *far* more difficult to read, particularly with the func
 
 ```
 
+For the third exercise, read the comment carefully: it asks for the 10 *lowest*
+years, and `arrange()` sorts ascending by default, so no `desc()` is needed. The
+fourth exercise does want `desc()`. The point of pairing them is that "slice the
+first ten" means something different depending on how you sorted.
+
 
 
 
@@ -546,6 +1245,14 @@ You can get a generic set of summary statistics by passing your dataframe into t
 ```{r}
 summary(food_cpi_mutate)
 ```
+
+`summary()` is base R and prints one block per column: minimum, first quartile,
+median, mean, third quartile, maximum. Two things to read here. In the
+`food_change_percent` block the median is 2.45 while the mean is 2.82, so the
+mean sits above the middle observation, which is the signature of a right skew
+caused by a few large years. And all four lagged columns carry an extra line,
+`NA's :1`, reporting the missing 2000 value. `summary()` tells you about missing
+data without being asked. Most other functions do not.
 
 However, you'll often want to get more specific stats. `summary()` gives us measures of the values themselves - Min/Max, quantiles, Mean - but nothing related to variance. It's also just raw data over the whole dataset without grouping. 
 
@@ -563,7 +1270,21 @@ food_cpi_mutate %>%
 
 ```
 
+The output is a one-row tibble. That is the defining behavior of `summarise()`
+and the thing that separates it from `mutate()`: `mutate()` returns as many rows
+as it received, `summarise()` collapses them to one row per group, and with no
+grouping the whole table is one group.
+
+The naming works the same way as in `mutate()`. `mean_Food = mean(Food)` says
+"make a column called `mean_Food` holding the result of `mean()` applied to the
+`Food` column".
+
 (Notice the `NA` values in the `mean_food_change` and `sd_food_change` columns!)
+
+`mean_Food` is 126.69 and `sd_Food` is 21.70, both fine. `mean_food_change` and
+`sd_food_change` are `NA`, because one of the 23 values fed into them is `NA`
+and `NA` contaminates any arithmetic it touches. R is not broken here; it is
+refusing to invent a number for the 2000 change.
 
 There's a whole range of functions you can use here.
 
@@ -585,6 +1306,10 @@ Then there are the ones more related to the structure and elements of your data:
 -   `quantile()`: Calculates specified quantiles of values in a column.
 -   `length()`: Returns the length of a vector or the number of elements in a column.
 
+`n()` is the odd one out: it takes no arguments at all, because it counts rows
+rather than reading a column. It only works inside `summarise()`, `mutate()` and
+`filter()`, where `dplyr` knows what "the current group" means.
+
 Let's run a bunch of these.
 
 #### NA Note
@@ -592,6 +1317,13 @@ Let's run a bunch of these.
 I mentioned how our `mutate()` function involved taking lags, resulting in our first row having `NA` values in several variables. When we feed these into summary statistic functions, we get problems.
 
 Thankfully, we can tell the functions to ignore these rows, and calculate as though they didn't exist, with the argument `na.rm = TRUE`. We do this for all the functions except `first()` and `last()`; these two are about what's literally in the data column, so it makes sense we don't want to ignore the value!
+
+`na.rm` stands for "NA remove", and it is an argument of the statistical
+function, not of `summarise()`. It goes inside the inner brackets:
+`mean(food_change_percent, na.rm = TRUE)`, never
+`summarise(..., na.rm = TRUE)`. The default is `FALSE` on purpose. Silently
+dropping missing observations changes the sample you are describing, and R makes
+you say out loud that you meant to.
 
 ```{r}
 # Assuming food_cpi_mutate is your dataframe
@@ -611,6 +1343,24 @@ food_cpi_mutate %>%
 
 ```
 
+Reading the row: mean food inflation over 2001-2022 is 2.82 percent, with a
+standard deviation of 1.74. The maximum is 8.89 (2022) and the minimum is 0.07
+(2017). Variance is 3.04, which is just the standard deviation squared, so
+reporting both is redundant.
+
+`first_inflation` is `NA`. That is the expected answer and the reason the note
+above says not to add `na.rm = TRUE` to it: `first()` reports what is literally
+in row 1, and row 1 has no value. `last_inflation` is 8.89, the 2022 figure,
+because the rows are still in year order. If you had sorted the tibble first,
+`first()` and `last()` would report something else entirely. They describe row
+position, not time.
+
+The quartiles are worth a second look. The median is 2.45 and the 75th
+percentile is 3.46, but the maximum is 8.89. Three quarters of the years sit
+under 3.5 percent and one year is nearly triple that. Whenever the gap between
+`p75` and the maximum is that large, expect an outlier to dominate any
+regression you fit later, which is exactly what Section 4.3 shows.
+
 There won't be an exercise for this section, because we're going to join `summarise()` with a function that adds a lot more power. 
 
 
@@ -619,9 +1369,20 @@ There won't be an exercise for this section, because we're going to join `summar
 
 `group_by()` divides a DataFrame into "groups" based on having shared values in one or more columns. You can then run summary statistics across these to extract information about how they differ.
 
+`group_by()` on its own changes nothing you can see; it attaches a label to the
+data frame saying "treat these rows as belonging together". The next verb in the
+chain then does its work once per group instead of once for the whole table.
+That is the entire idea, and it turns `summarise()` from a one-row report into a
+comparison table.
+
 Unfortunately for us, the `Year` changes every year. All our other variables are continuous, making them highly unlikely to share common values. There's also not much meaningful information conveyed by two years both having a `food_change_percent` value of, say, 4.92653414.
 
 So, we'll quickly create some new variables which *do* split the data into groups.
+
+The next chunk builds two grouping columns. It also reassigns `food_cpi_mutate`,
+so from this point on that object has 9 columns rather than 7. Every later
+chunk, including the plots in Section 4, depends on `decade` existing, so run
+this one before skipping ahead.
 
 ```{r}
 # Create 'even_years' column
@@ -637,10 +1398,36 @@ food_cpi_mutate <- food_cpi_mutate %>%
     TRUE ~ "Unknown"
   ))
 ```
+
+Three pieces of syntax here.
+
+`%%` is the modulo operator: it returns the remainder after division. `2022 %% 2`
+is 0 and `2021 %% 2` is 1, so `Year %% 2 == 0` is a `TRUE`/`FALSE` test for
+"even year".
+
+`ifelse(test, yes, no)` is a vectorized if-statement. It runs the test on all 23
+rows at once and returns `yes` where the test is `TRUE` and `no` where it is
+`FALSE`. Here it returns 1 and 0, so `even_years` ends up numeric rather than
+logical. Storing a `TRUE`/`FALSE` as 1/0 is a habit from Stata and it works, but
+`Year %% 2 == 0` on its own would have given a genuine logical column.
+
+`case_when()` generalizes `ifelse()` to more than two outcomes. Each line has the
+form `condition ~ value`, and the conditions are tested **in order**, with the
+first match winning. The final `TRUE ~ "Unknown"` is a catch-all: `TRUE` is
+always true, so any row that matched nothing above lands there. In this dataset
+nothing does, since the years run 2000 to 2022, but writing the fallback is good
+practice. Without it, unmatched rows would silently become `NA`.
+
 ```{r}
 food_cpi_mutate
 
 ```
+
+The two new columns are at the right-hand end. `decade` is `<chr>`, a character
+column, not a factor. `ggplot2` will sort character values alphabetically, which
+for "00s", "10s", "20s" happens to be the correct chronological order. That is
+luck, not design: had the labels been "2000s" and "90s", alphabetical order
+would have put the 1990s last.
 
 Now we can see if our stats varied systematically between even and odd years, and by decade.
 
@@ -657,6 +1444,54 @@ food_cpi_mutate %>%
 
 
 ```
+
+Two rows out, one per value of `even_years`, and the grouping column is carried
+into the output automatically so you can tell which row is which. Odd years
+(`even_years = 0`) average 2.796 percent food inflation and even years average
+2.843 percent. A gap of five hundredths of a percentage point across 22
+observations is noise. That is the useful result: the calendar's parity does not
+predict inflation, and now you have shown it rather than assumed it.
+
+Note that `avg_Food` did not need `na.rm = TRUE` because the `Food` column has
+no missing values, while the two lagged columns did. Add the argument where the
+data requires it, not everywhere out of habit.
+
+One behavior to know about: after `group_by()` and `summarise()`, the result may
+still carry grouping information if you grouped by more than one column, and a
+message will say so. `summarise(..., .groups = "drop")` returns a plain
+ungrouped tibble and silences the message. `ungroup()` at the end of a chain
+does the same job.
+
+Grouped means are easier to compare as bars.
+
+```{r}
+decade_means <- food_cpi_mutate %>%
+  group_by(decade) %>%
+  summarise(
+    n_years                 = n(),   # rows in this group
+    avg_food_change_percent = mean(food_change_percent, na.rm = TRUE)
+  )
+
+decade_means
+
+ggplot(decade_means, aes(x = decade, y = avg_food_change_percent)) +
+  geom_col(fill = "steelblue") +
+  # geom_text() writes the value on top of each bar. vjust = -0.4 nudges the
+  # label just above the bar rather than inside it.
+  geom_text(aes(label = round(avg_food_change_percent, 2)), vjust = -0.4) +
+  labs(
+    title = "Fig. 0d: Average yearly food CPI change, by decade",
+    x     = "Decade",
+    y     = "Mean food CPI change (percent)"
+  )
+```
+
+The 2010s averaged 2.16 percent, the 2000s 2.97 percent, and the three years of
+the 2020s in this sample 4.56 percent. Read the `n_years` column before reading
+the bars: the 00s and 10s each contain 10 years, the 20s only 3. A mean of three
+observations, one of which is the 2022 outlier, is not comparable evidence to a
+mean of ten. Reporting the group size next to the group mean is not optional
+politeness; it is what stops the reader from over-reading the third bar.
 
 #### Exercise (`summarise()`, `group_by()`)
 
@@ -677,6 +1512,10 @@ Now calculate three more summary statistics for `food_cpi_mutate`, grouping by `
 
 ```
 
+For the second one, think about the group sizes before you interpret anything.
+Six groups drawn from 23 rows leaves the "20s, odd year" cell with a single
+observation, and a standard deviation computed on one value is `NA`.
+
 
 
 ## 4. Introduction to Data Visualization: `ggplot2`
@@ -690,13 +1529,36 @@ Now calculate three more summary statistics for `food_cpi_mutate`, grouping by `
 
 This creates a sequential process to building visualizations, where sophisticated plots can be created with simple components. 
 
+The practical consequence is that you build a plot by addition. Every `ggplot2`
+plot is a `ggplot()` call plus one or more layers, joined with `+`:
 
+```
+ggplot(data = DATA, mapping = aes(MAPPINGS)) +
+  geom_FUNCTION() +
+  labs(TITLES AND AXIS NAMES)
+```
+
+Two syntax points before anything else.
+
+The connector is `+`, not `%>%`. This trips up everybody at least once.
+`ggplot2` predates the pipe, and its `+` composes plot layers rather than
+passing data forward. You can pipe *into* a `ggplot()` call
+(`data %>% ggplot(aes(...)) + geom_point()`), but inside the plot it is `+` all
+the way down.
+
+Like the pipe, the `+` must end the line. A `+` at the start of a line is a
+syntax error, and a *missing* `+` is worse, because R will happily run the first
+part as a complete plot and then evaluate the orphaned `geom_` call on its own,
+producing an error that names the geom rather than the missing operator.
 
 2. Components of `ggplot2`
 
 - `ggplot()`
 
 This is the function you call to initialize a plot in your R code chunk. You feed in a dataframe or tibble as your `data` argument, upon which your plot will be based. 
+
+On its own, `ggplot(data = df)` draws an empty grey panel. It has data but no
+instruction about what to draw or where. Both of those come from the layers.
 
 - Geometric Objects: `geoms`
 
@@ -714,7 +1576,14 @@ Geometric objects are added on after your `ggplot()` call after a `+` sign. Thes
 
 Some geoms function as direct mappings of a data point's value into a visual field. For example, `geom_point()` and `geom_line()` use these values as coordinates on the X and Y axes. Other geoms run some sort of statistical transformation or calculation and display an object based off of this result. `geom_smooth()` is an example of this case, where the best-fit line between your X and Y variables is calculated, and then drawn over your dataset.
 
+Two more geoms used below that draw nothing from the data at all:
+`geom_hline(yintercept = 0)` draws a horizontal reference line at a value you
+choose, and `geom_vline(xintercept = 2020)` draws a vertical one. They take a
+number rather than a column, because they are annotations, not data.
 
+Layer order is drawing order. A `geom_smooth()` written after `geom_point()`
+draws its band on top of the points; written before, the points sit on top of
+the band. When two layers overlap, the last one wins.
 
 - Aesthetic Mapping: `aes()`
 
@@ -734,11 +1603,32 @@ For example, consider a grocery store's sales data, which has data on `item_cate
 
 Some aesthetics can be set manually. In your `geom_X()` function, but outside of the `aes()` statement, you might pass `color = "blue"`, to make a line or scatter points a specific color.
 
+That last paragraph states the single most important distinction in `ggplot2`,
+so it is worth putting a name to it:
+
+- **Mapping** means *inside* `aes()`: `aes(color = decade)` says "let the value
+  of `decade` decide the color", so `ggplot2` picks colors, builds a scale, and
+  draws a legend.
+- **Setting** means *outside* `aes()`: `geom_point(color = "blue")` says "make
+  every point blue", full stop. No scale, no legend.
+
+Put a constant inside `aes()` and you get the wrong thing but not an error:
+`aes(color = "blue")` creates an invisible one-level variable whose single value
+is the text `"blue"`, and `ggplot2` assigns it its first default color, which is
+red. Figures 3 and 4 below use that behavior deliberately, with
+`scale_color_manual()` to fix the colors afterwards, which is a legitimate trick
+for hand-labeling series.
+
 We'll see examples of all of these below!
 
 
 ### 4.2 Line Charts
 
+The first plot maps `Year` to x and `Food` to y, and draws one `geom_line()`.
+Note the `mapping = ` argument name: it is optional, because `mapping` is the
+second argument of `ggplot()`, but writing it makes the call easier to read.
+`labs()` sets the axis names and the title, and every plot you hand in should
+have all three.
 
 ```{r}
 library(ggplot2)
@@ -747,6 +1637,11 @@ ggplot(food_cpi_mutate, mapping = aes(x = Year, y = Food)) +
   geom_line() +
   labs(x = "Year", y = "Food Price CPI", title = "Fig. 1: Changes in Food Prices over Time")
 ```
+
+The food index climbs from 93.3 in 2000 to 171.5 in 2022, and the line is close
+to straight for the whole period except the final segment, which is much
+steeper. Nothing else in the plot competes for attention, which is what a
+single-series line chart is for.
 
 This is a fairly basic, serviceable line chart. Everybody gets what it means; no professor will fail you over it. But we can do more with it, customizing color and adding more lines to show a broad range of data.
 
@@ -757,8 +1652,22 @@ ggplot(food_cpi_mutate, mapping = aes(x = Year, y = Food)) +
   labs(x = "Year", y = "Food Price CPI", title = "Fig 2: Scatter+Regplot of Food Prices over Time")
 ```
 
-Instead of a lineplot, this visualization shows the individual data points with a `geom_point` object, and a linear best fit line with `geom_smooth`. It very starkly shows how food prices jump far off their long-run trend in the final time period, as COVID-era high inflation kicks in. 
+Two layers share the one `aes()` from the `ggplot()` call: the points and the
+fitted line both use `Year` and `Food`. `method = "lm"` fits an ordinary least
+squares regression of `Food` on `Year`, and `se = FALSE` turns off the grey
+confidence band that `geom_smooth()` draws by default. The message R prints,
+`geom_smooth() using formula = 'y ~ x'`, is telling you the model it fitted; it
+is a message, not a warning, and it appears every time unless you name the
+formula yourself.
 
+The fitted line has a slope of about 3.18 index points per year and an R-squared
+of 0.985, so a straight line in calendar time explains almost all of the
+variation. Instead of a lineplot, this visualization shows the individual data points with a `geom_point` object, and a linear best fit line with `geom_smooth`. It very starkly shows how food prices jump far off their long-run trend in the final time period, as COVID-era high inflation kicks in. 
+
+Quantify that last point rather than eyeballing it: the regression predicts a
+2022 food index of 161.6, and the actual value is 171.5. The final point sits
+about 10 index points above trend, which is the largest gap anywhere in the
+sample.
 
 
 
@@ -774,7 +1683,65 @@ ggplot(data = food_cpi_mutate) +
                      name = "Data Series:")
 ```
 
+This plot uses the constant-inside-`aes()` trick described in Section 4.1. Each
+`geom_line()` gets its own `aes()`, with its own `y` column and a `color` set to
+a quoted label. `ggplot2` treats those two labels as the two levels of an
+invisible categorical variable, and builds a legend from them.
+`scale_color_manual()` then takes control of that scale: `values` assigns the
+colors, `labels` rewrites the text shown in the legend, and `name` titles the
+legend.
+
+The order matters and is easy to get wrong. `values` and `labels` are matched to
+the *levels*, which are sorted alphabetically, not to the order the
+`geom_line()` calls appear. Here `"All_items_but_food_energy"` sorts before
+`"Food"`, so `"blue"` goes to the all-items series and `"red"` to food. Swap the
+two `geom_line()` lines and the colors do not move; change one of the quoted
+labels to something starting with "Z" and they do.
+
 `All-items` falls behind `Food` starting roughly in 2005, gradually diverging until roughly 2021. Both tick up with much higher inflation than before, but `Food` does so much more sharply. 
+
+Repeating a `geom_line()` per series works, but it does not scale: five series
+means five near-identical layers and five chances to typo a column name. The
+tidyverse answer is to reshape the data into long form first, then draw one
+layer.
+
+```{r}
+# pivot_longer() turns the two value columns into two rows per year: one column
+# says which series the value came from, another holds the value itself.
+cpi_long <- food_cpi_mutate %>%
+  select(Year, Food, All_items_but_food_energy) %>%
+  pivot_longer(
+    cols      = c(Food, All_items_but_food_energy),
+    names_to  = "series",
+    values_to = "index_value"
+  )
+
+# 46 rows now instead of 23: two series times 23 years.
+head(cpi_long, 4)
+
+ggplot(cpi_long, aes(x = Year, y = index_value, color = series)) +
+  geom_line() +
+  # Naming the values explicitly removes the alphabetical-order trap above.
+  scale_color_manual(
+    values = c("All_items_but_food_energy" = "blue", "Food" = "red"),
+    labels = c("All_items_but_food_energy" = "All-items excl. food and energy",
+               "Food" = "Food"),
+    name   = "Data Series:"
+  ) +
+  labs(
+    title = "Fig. 3b: Fig. 3 redrawn from long-format data",
+    x     = "Year",
+    y     = "CPI (2002 = 100)"
+  )
+```
+
+The picture is identical to Figure 3, which is the point: same data, one
+`geom_line()` instead of two, and `color = series` is now a genuine mapping to a
+real column rather than a trick with quoted constants. Naming the values as
+`"column_value" = "color"` pairs also makes the assignment explicit, so
+alphabetical ordering stops mattering. Use the repeated-`geom_line()` form for
+two series when you are in a hurry, and `pivot_longer()` for anything larger or
+anything you will have to edit again.
 
 Let's take a look at their percentage growths over time. 
 
@@ -783,15 +1750,30 @@ ggplot(data = food_cpi_mutate) +
   geom_line(mapping = aes(x = Year, y = All_items_change_percent, color = "All_items")) +
   geom_line(mapping = aes(x = Year, y = food_change_percent, color = "Food")) +
   labs(title = "Fig. 4: CPI Percentage Changes Over Time",
-       x = "Year", y = "Price") +
+       x = "Year", y = "Yearly change (percent)") +
   scale_color_manual(values = c("blue", "red"),
                      labels = c("All_items", "Food"),
                      name = "Data Series:")
 ```
 
+Same construction as Figure 3, different columns. Both lines start in 2001
+rather than 2000, because the 2000 values are `NA` and `geom_line()` cannot draw
+a segment to a missing point.
+
 So, `Food` has consistently higher percentage changes over most of the 2004+ period. How big are these? 
 
+The red line sits above the blue one in 17 of the 22 years. The exceptions are
+2002, 2003, 2016, 2017 and 2018. Notice also how much flatter the blue line is:
+the all-items series stays between 0.86 and 4.96 percent, while food ranges from
+0.07 to 8.89.
+
 We can actually pass in a modified value as the `y` value in our `geom_line` function. If we subtract `All_items_change_percent` from `food_change_percent`, we get the difference in these values (amazing!) which can be plotted directly. Positive values show when food prices are growing faster; negative values show when All Items are growing faster.
+
+Doing arithmetic inside `aes()` is worth noticing on its own. `ggplot2` evaluates
+the expression against the data frame, so any calculation you could put in
+`mutate()` can go straight into the mapping. Do it for a quick look; do it in
+`mutate()` when the derived variable is part of the analysis, so it is stored,
+inspectable and reusable.
 
 ```{r}
 
@@ -803,7 +1785,24 @@ ggplot(data = food_cpi_mutate) +
   scale_color_manual(values = "turquoise")
 ```
 
+Here `color = "turquoise"` sits *outside* `aes()`, so it is a setting, not a
+mapping: the line is turquoise and there is no legend. The
+`scale_color_manual()` call on the last line therefore does nothing at all,
+because no color aesthetic was mapped for it to control. It is harmless, and it
+is a good illustration of the mapping-versus-setting distinction: a scale
+function can only modify a scale that exists.
+
+The dashed `geom_hline()` at zero is doing real work. On a difference plot the
+zero line is the whole reference frame, and without it the reader has to hunt
+along the y axis to see which side of nothing a point is on.
+
 The differences in their growth rates (Food minus All items) is also consistently positive, meaning Food inflation consistently outpaces normal inflation.
+
+Read the line against the dashed zero before accepting that. The difference is
+positive in 17 of the 22 years and negative in five: 2002, 2003, 2016, 2017 and
+2018. "Usually positive, and positive in every year since 2019" is what the data
+supports. The peak is 2022, where food inflation exceeds all-items inflation by
+3.93 percentage points.
 
 You could say that `Fig. 4` and `Fig. 5` are two ways of showing the same data; `5` is a transformation of the data in `4`. This reduces the information conveyed by `Fig. 5`; in a year with an inflation of difference of 2%, we could have Food/All-items inflations of 4% and 2%, or of 100% and 98%!
 
@@ -846,8 +1845,25 @@ ggplot(data = food_cpi_mutate) +
 
 ```
 
+The vertical line is at 2020 because that is when the pandemic starts, but the
+break in the series is not there. Both lines carry on at their old slopes
+through 2020. The all-items line bends upward in 2021 and again in 2022. Food
+does not bend until 2022: its 2021 increase of 3.8 is smaller than its 2015 and
+2019 increases of 5.0 and 4.9, whereas its 2022 increase is 14.0. The figure is a good example
+of an annotation that is defensible but does not mark what the reader assumes it
+marks, so say in the caption whether the line is an event date or an estimated
+break.
+
+For a dashed line instead of solid, add `linetype = "dashed"` as in Figure 5.
+Both arguments sit outside `aes()`, because they are settings.
+
 2. Use `durables_cpi` to visualize the CPI of the different product types over time. 
 
+Five series, so this is the case where `pivot_longer()` pays off. The shape to
+aim for is one row per year per product type, then a single `geom_line()` with
+`color` mapped to the product-type column. `durables_cpi` gained an
+`avg_durables_cpi` column in Exercise 3 below if you run that chunk first, so
+select the columns you want rather than piping the whole tibble in.
 
 ```{r}
 
@@ -863,6 +1879,13 @@ colnames(durables_cpi)
 colnames(services_cpi)
 ```
 
+The plan below is: add an average column to each tibble, keep only what you need
+from each, glue them side by side, then plot. `bind_cols()` joins two data frames
+column-wise by *position*, so it assumes both are sorted identically and have the
+same number of rows. That is true here because both came from `cpi_t` in the same
+row order. It would not be true in general, and the safer tool for real work is
+a join such as `left_join(x, y, by = "Year")`, which matches on a key instead of
+trusting the row order.
 
 ```{r}
 #colnames(durables_cpi)
@@ -914,6 +1937,19 @@ averaged_cpi
 
 ```
 
+`averaged_cpi` ends up with three columns: `Year`, `avg_durables_cpi` and
+`avg_services_cpi`. Only `durables_cpi_select` kept `Year`, which is why
+`bind_cols()` does not produce a duplicate. Had both kept it, `bind_cols()`
+would have renamed the second copy `Year...3` rather than failing, which is the
+kind of silent mess that makes joins the better habit.
+
+Two things to think about before you plot. This average weights each component
+equally, whereas Statistics Canada weights them by expenditure share, so
+`avg_durables_cpi` is not an official aggregate and should not be described as
+one. And the five durable components are on the same 2002 = 100 base, so
+averaging them is at least dimensionally sensible; averaging a price index with,
+say, a dollar value would not be.
+
 
 ### 4.3 Scatter Plots
 
@@ -922,33 +1958,63 @@ Another fundamental type of plot is the Scatter Plot, where we establish X and Y
 
 You might actually consider a line chart to be a specialized form of a scatter plot, with the points represented and then consecutive points represented with straight lines. `Fig. 2` also shows the similar option of adding a linear best-fit line to show the overall statistical relationship, rather than the standard line plot approach. We'll try this too.
 
+One change from Section 4.2 that is easy to miss: from here on, time is no
+longer on the x axis. The plots below put one percentage change against another,
+so each point is a year but the years are not in order along the axis. A scatter
+plot answers "how do these two variables move together", not "what happened
+when".
 
 ```{r}
 ggplot(food_cpi_mutate, aes(x = All_items_change_percent, y = food_change_percent)) +
   geom_point() +
-  labs(x = "All Items But Food, Energy", y = "Food Price", title = "Fig 6: Scatterplot of Food vs Non-Food CPI Changes")
+  labs(x = "All-items excl. food and energy: yearly change (percent)",
+       y = "Food CPI: yearly change (percent)",
+       title = "Fig 6: Scatterplot of Food vs Non-Food CPI Changes")
 ```
+
+R prints a warning here: one row was removed because it contains a missing
+value. That is 2000, whose lagged columns are `NA`. The warning is correct
+behavior and worth leaving visible rather than silencing, because a plot quietly
+dropping rows is exactly the sort of thing you want to be told about.
 
 About as simply as possible, we get a look at how data points are distributed along the `Food` and `All items but food and energy` CPI types. Outliers are not statistically identified, but we do get some idea from visual inspection; a clumping around "normal" inflation levels, with one extreme value at over twice the average inflation value. 
 
-
+Excluding the outlier, the points span 0.86 to 2.77 percent on the x axis and
+0.07 to 4.93 percent on the y axis, with most of them packed into the lower left.
+The lone point at (4.96, 8.89) is 2022, more than three times the mean food
+inflation of 2.82 percent. Remember which year it is; the rest of this section is
+largely about what that one point does to a fitted line.
 
 ```{r}
 ggplot(food_cpi_mutate, aes(x = All_items_change_percent, y = food_change_percent, shape = decade)) +
   geom_point() +
-  labs(x = "All Items But Food, Energy", y = "Food Price", title = "Fig 7a. Previous with Decade shown via Shape")
+  labs(x = "All-items excl. food and energy: yearly change (percent)",
+       y = "Food CPI: yearly change (percent)",
+       title = "Fig 7a. Previous with Decade shown via Shape")
 
 ggplot(food_cpi_mutate, aes(x = All_items_change_percent, y = food_change_percent, size = decade)) +
   geom_point() +
-  labs(x = "All Items But Food, Energy", y = "Food Price", title = "Fig 7b. Previous with Decade shown via Size")
+  labs(x = "All-items excl. food and energy: yearly change (percent)",
+       y = "Food CPI: yearly change (percent)",
+       title = "Fig 7b. Previous with Decade shown via Size")
 
 
 ggplot(food_cpi_mutate, aes(x = All_items_change_percent, y = food_change_percent, color = decade)) +
   geom_point() +
-  labs(x = "All Items But Food, Energy", y = "Food Price", title = "Fig 7c. Previous with Decade shown via Color")
+  labs(x = "All-items excl. food and energy: yearly change (percent)",
+       y = "Food CPI: yearly change (percent)",
+       title = "Fig 7c. Previous with Decade shown via Color")
 ```
 
 The `aes()` function called in our initializing `ggplot()` function lets us set features for the whole plot. These `aesthetics` can be very useful for conveying more information without using new space, a third dimension, or other complicated features. In `Figs 7a-c`, we see three different ways, using `shape`, `size`, and `color`.
+
+All three plots contain identical data, mapped to `decade` three different ways.
+Note that Figure 7b prints an extra warning that the other two do not:
+"Using size for a discrete variable is not advised." `ggplot2` is telling you
+that `size` is an *ordered, quantitative* channel. A bigger dot reads as "more
+of something", and the reader will try to interpret the ordering. That is fine
+when the variable really is ordered, as decades happen to be, and misleading for
+an unordered category like province or product type.
 
 Which of these is the best?
 
@@ -958,27 +2024,96 @@ Size?
 
 Color?
 
+Judge them on three criteria rather than taste. How many levels can the channel
+carry before it becomes unreadable? Does the channel imply an order that the
+variable does not have? And will it survive greyscale printing and the roughly
+8 percent of men with red-green color vision deficiency? Apply those to the three
+figures above and to a hypothetical version with twelve categories instead of
+three, and the answer usually stops being a matter of opinion.
 
 ```{r}
 ggplot(food_cpi_mutate, mapping = aes(x = All_items_change_percent, y = food_change_percent)) +
   geom_point() +
   geom_smooth(method = "lm") + 
-  labs(x = "All Items But Food, Energy", y = "Food Price", title = "Fig 8a. Food, All-items CPI with Linear Best-Fit Line")
+  labs(x = "All-items excl. food and energy: yearly change (percent)",
+       y = "Food CPI: yearly change (percent)",
+       title = "Fig 8a. Food, All-items CPI with Linear Best-Fit Line")
 ```
 
 
 This is the same fundamental relationship as before, but now visualized with a best fit line, provided by `geom_smooth()`. This "best fit" is decided by our familiar linear regression method because we specified `method = "lm"`. Other options are available. `geom_smooth()` defaults to `"auto"`, which uses an internal selection method:
 
+The grey band around the line is the 95 percent confidence interval for the
+conditional mean, drawn because `se` defaults to `TRUE` here; Figure 2 turned it
+off with `se = FALSE`. Where the band is wide, the fitted line is poorly pinned
+down. It flares out at the right-hand end, which is the plot telling you that
+the slope is being carried by a single point out there.
+
+The fitted slope is 1.32: a one point rise in all-items inflation comes with a
+1.32 point rise in food inflation, and the R-squared is 0.41. Drop 2022 and refit
+and the slope falls to 0.004 with an R-squared of 0.000004. One observation out
+of 22 accounts for the entire relationship. That is not a reason to delete the
+point; it is a reason to report both numbers.
+
 ```{r}
 ggplot(food_cpi_mutate, mapping = aes(x = All_items_change_percent, y = food_change_percent)) +
   geom_point() +
   geom_smooth(method = "auto") + 
-  labs(x = "All Items But Food, Energy", y = "Food Price", title = "Fig 8b. Food, All-items CPI with Local Regression Best-Fit Line")
+  labs(x = "All-items excl. food and energy: yearly change (percent)",
+       y = "Food CPI: yearly change (percent)",
+       title = "Fig 8b. Food, All-items CPI with Local Regression Best-Fit Line")
 ```
 
 It defaults to `"loess"`, or local regression, a more flexible technique that involves multiple polynomials. 
 
+The message R prints confirms it: `geom_smooth() using method = 'loess' and
+formula = 'y ~ x'`. The rule `geom_smooth()` applies is size-based, using loess
+for fewer than 1000 observations and a generalized additive model above that. So
+`"auto"` on a small sample and `"auto"` on a large one fit different models, and
+a plot whose method changes when you add data is not a plot you want in a paper.
+Name the method.
+
 Between Figures `8a` and `8b`, both are clearly imperfect. Our outlier almost certainly has heavy leverage on the final result. In normal circumstances, defaulting to `"lm"` is safe and easily explainable, being the direct correlation between your variables rather than a "black box" model decided by R, and so `"lm"` would be my general recommendation. 
+
+The refit above makes "heavy leverage" precise rather than impressionistic. Loess
+is affected differently: it fits locally, so 2022 bends only the right-hand end
+of the curve instead of tilting the whole line, which is why the middle of the
+loess curve is nearly flat while the OLS line slopes.
+
+When one point matters this much, label it. The chunk below draws the same
+scatter and writes the year next to any point above 4 percent food inflation.
+
+```{r}
+ggplot(food_cpi_mutate,
+       aes(x = All_items_change_percent, y = food_change_percent)) +
+  geom_point(na.rm = TRUE) +
+  # A geom can take its own data argument. Here only the high-inflation rows are
+  # passed to geom_text(), so only those three points get labeled.
+  geom_text(
+    data    = filter(food_cpi_mutate, food_change_percent > 4),
+    mapping = aes(label = Year),
+    nudge_y = 0.35,   # move the label up a little so it clears the point
+    size    = 3
+  ) +
+  # formula = y ~ x states the model explicitly and silences the message.
+  geom_smooth(method = "lm", se = FALSE, formula = y ~ x, na.rm = TRUE) +
+  labs(
+    title = "Fig 8c. Fig 8a with the high-inflation years labeled",
+    x     = "All-items excl. food and energy: yearly change (percent)",
+    y     = "Food CPI: yearly change (percent)"
+  )
+```
+
+The three labeled points are 2022, 2009 and 2001, the same three `filter()`
+returned in Section 3.5. 2022 sits far up and to the right of everything else,
+while 2009 and 2001 are high on the y axis but ordinary on the x axis: those were
+years of high food inflation without high general inflation. 2022 is the only
+year where both moved together, which is why it alone controls the slope.
+
+Passing `data =` to a single geom is the general mechanism worth taking away.
+Layers inherit the plot's data and mappings by default, and either can be
+overridden per layer. That is how you annotate a subset, overlay a second data
+source, or highlight specific observations.
 
 
 #### Exercises (`geom_point()` and `geom_smooth()`)
@@ -996,7 +2131,18 @@ Use `food_cpi_mutate` for the exercises.
 
 As we can see, we have a fairly strong fit of our data points to our linear best-fit line; inflation increases prices by a roughly equal amount between most periods. 
 
+The regression behind that plot has an R-squared of 0.985 and a slope of 3.18
+index points per year, so "fairly strong" is an understatement for the fit and
+"roughly equal amount" is the right reading of the slope: the index gains about
+the same number of points each year, not the same percentage.
+
 Note that with inflation being targeted to 2%, this would suggest over longer periods any linear relation in CPI would break down, as the compounding increases cause bigger and bigger gaps. However, this is not a problem on our ~20 year timeline. 
+
+The mechanism is worth stating plainly. Constant *percentage* growth is
+exponential in levels, so a genuinely constant 2 percent inflation would curve
+upward on this plot, not run straight. Over 23 years at 2 percent the curvature
+is too small to see against the year-to-year noise. Over 60 years it would
+dominate, and the linear fit would be visibly wrong.
 
 
 
@@ -1008,12 +2154,23 @@ Note that with inflation being targeted to 2%, this would suggest over longer pe
 
 Now, plotting our percentage increases directly, we see that their trajectory is largely flat. They're mostly distributed around a constant average near 2.8% with random dispersions. As we've seen many times, 2022 is a major outlier, and by a proportionally greater amount than in the `Exercise 4` plot of price levels.
 
+Numbers for that claim: the mean is 2.82 percent, and regressing
+`food_change_percent` on `Year` gives a slope of 0.036 percentage points per
+year with an R-squared of 0.018 and a p-value of 0.56. Flat, and not
+distinguishable from flat.
+
 
 
 6. An interesting point of discussion is how these results fit together. The `Exercise 4` plot shows us a roughly constant increase in CPI level; the `Exercise 5` plot shows inflation varies year to year, but has no long-run trend in any particular direction. **Do these results make sense together? Discuss with your partners, then as a group.**
 
-
-
+Two things to have straight before you argue about it. A price index and its
+growth rate are different objects: one is a level, the other is a first
+difference expressed as a share of the previous level. And "no trend in the
+growth rate" is a statement about the *second* derivative of the level series,
+not the first. Work out what a perfectly constant 2.8 percent inflation rate
+would produce in the Exercise 4 plot, and what a perfectly constant 3.18
+index-points-per-year increase would produce in the Exercise 5 plot, and the
+question mostly answers itself.
 
 
 
@@ -1029,17 +2186,37 @@ In Section 3, we introduced `dplyr`, a very powerful tool for data cleaning. No 
 
 In Section 4, we focused on data visualization using `ggplot2`. Part of the same `tidyverse` library as `dplyr`, it allows us to assemble sophisticated and custom-built plots from simple components. This will be useful both in the initial exploration of your data when starting a project, and when displaying your final results. 
 
+## What to take away
 
+The six `dplyr` verbs, and the one sentence that describes each:
 
+| Verb | What it changes |
+|------|-----------------|
+| `select()` | which columns you keep, and their order |
+| `mutate()` | adds columns computed from existing ones |
+| `filter()` | which rows you keep, based on a logical test |
+| `arrange()` | the order of the rows |
+| `summarise()` | collapses many rows into one row of statistics |
+| `group_by()` | makes the verb after it run once per group |
 
+All six take a data frame first, return a new data frame, and never modify the
+original. That is what makes `%>%` work, and it is why an unassigned result is
+printed and lost.
 
+For `ggplot2`, the skeleton is always data, then mappings inside `aes()`, then
+one or more `geom_` layers joined with `+`, then `labs()`. The distinction that
+causes the most confusion is mapping (inside `aes()`, driven by a column,
+produces a legend) versus setting (outside `aes()`, a fixed value, no legend).
 
+Three habits from today that generalize past this dataset:
 
-
-
-
-
-
-
-
-
+1. Look at the data after every restructuring step. The import chunk in Section
+   3.2 has eight of them, and a single wrong one produces a table that looks
+   plausible and is wrong.
+2. Handle `NA` explicitly. The lagged columns carry one, and it changed the
+   behavior of `mean()`, `filter()`, `geom_line()` and `geom_point()` in four
+   different ways in this document.
+3. Put a number on what a plot appears to show. "Food inflation outpaces general
+   inflation" became "in 17 of 22 years, peaking at a 3.93 point gap in 2022",
+   and "the outlier has leverage" became "the slope falls from 1.32 to 0.004
+   without it". The plot finds the claim; the arithmetic settles it.
