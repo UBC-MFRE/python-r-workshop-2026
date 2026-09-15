@@ -1,10 +1,32 @@
 ---
 title: 'Math/Stats Application Workshop: R'
-output: html_document
+output:
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    toc_depth: 3
+    number_sections: false
+    theme: readable
+    highlight: tango
+    code_folding: show
+    fig_width: 8
+    fig_height: 5
+    df_print: default
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+# This chunk configures every later chunk. `include=FALSE` means the chunk runs
+# but neither its code nor its output appears in the knitted document.
+#
+# echo = TRUE      : show the R code in the output, not just the results
+# fig.align        : center every figure
+# dpi              : resolution of the generated PNG figures
+#
+# Warnings and errors are deliberately left visible. If a chunk complains, you
+# should see the complaint.
+knitr::opts_chunk$set(echo = TRUE, fig.align = "center", dpi = 96)
 ```
 
 
@@ -26,7 +48,43 @@ Resources:
 - [Hypothesis Testing in R](https://www.r-bloggers.com/2022/12/hypothesis-testing-in-r/#:~:text=Hypothesis%20Testing%20in%20R%2C%20A,are%20demonstrated%20in%20this%20course.&text=Each%20type%20of%20test%20can,test().)
 - [Introduction to Econometrics With R](https://www.econometrics-with-r.org/)
 - run `?fn` for R functions, and get their documentation in the bottom-right frame.
-- search for a function's documentation on https://www.rdocumentation.org/ 
+- search for a function's documentation on https://www.rdocumentation.org/
+
+
+## How to read this document
+
+Everything you did yesterday in Python has a direct R translation. The statistics
+do not change. Only the syntax does. Four pieces of R vocabulary carry most of
+the load, so learn them now.
+
+**Function.** A named piece of code you call with round brackets: `mean(x)`
+calls the function `mean` on the input `x`. The things you put inside the
+brackets are its **arguments**. Arguments can be given by position
+(`t.test(pledges, 3)`) or by name (`t.test(x = pledges, mu = 3)`). Name them.
+Named arguments do not depend on order, and six months from now you will still
+be able to read the line.
+
+**Assignment.** `<-` stores a result under a name. `policy_df <- read_csv(...)`
+runs `read_csv` and parks the answer in `policy_df`. R also accepts `=` for
+this, but `<-` is the convention and it never gets confused with a named
+argument. Nothing is printed when you assign; type the name on its own line to
+see the object.
+
+**Vector.** The basic R container: an ordered run of values that are all the
+same type. `c(1, 4, 9)` builds a numeric vector of length 3, `c("a", "b")` a
+character vector of length 2. Almost every R function is written to take a whole
+vector at once, so `sqrt(c(1, 4, 9))` returns `1 2 3` with no loop. Python's
+closest analogue is a NumPy array, not a list.
+
+**Data frame.** A rectangle of data: a named collection of equal-length vectors
+stacked side by side as columns. One column is one variable, one row is one
+observation. This is R's version of a pandas DataFrame. The `tidyverse` uses a
+slightly polished data frame called a **tibble**, which prints only the first 10
+rows and tells you each column's type. Pull a single column out as a vector with
+the dollar sign: `policy_df$year`.
+
+Two more you will meet in a moment: the **pipe** `%>%`, which chains steps
+together, and **NA**, R's marker for a missing value.
 
 
 ```{r}
@@ -35,6 +93,27 @@ Resources:
 pacman::p_load(tidyverse, here, lmtest, sandwich)
 ```
 
+A **package** is a bundle of extra functions somebody else wrote. R ships with a
+core set (base R), and everything else you install once and then load in each
+session. `pacman::p_load()` does install-if-missing and load in one step, so
+this notebook runs on a fresh machine.
+
+The `::` in `pacman::p_load` means "the `p_load` function from the `pacman`
+package". You can always qualify a function this way, which is useful when two
+packages define the same name.
+
+What the four packages give us:
+
+- **tidyverse**: not one package but a set that loads together. `readr` for
+  reading files, `dplyr` for manipulating data frames, `ggplot2` for graphics,
+  `tidyr` for reshaping, `tibble`, `stringr`, `forcats`, `purrr`.
+- **here**: builds file paths starting from the project root, so a path that
+  works on your laptop also works on mine.
+- **lmtest**: `coeftest()`, for re-testing regression coefficients with a
+  different variance estimate.
+- **sandwich**: `vcovHC()`, the heteroskedasticity-robust variance estimator we
+  feed into `coeftest()`.
+
 
 
 
@@ -42,11 +121,42 @@ pacman::p_load(tidyverse, here, lmtest, sandwich)
 
 ```{r}
 # import data
-policy_df <- read_csv(here("policy_analysis.csv"))
+
+# here() builds an absolute path from the project root. It finds that root by
+# looking for a marker file: the r_applications.Rproj sitting next to this .Rmd
+# is one such marker. That works when this folder is the open project.
+#
+# If R was started somewhere else (say the top of the Git repository), here()
+# locks onto that other root and the CSV will not be there. The second line is
+# the fallback: when knitting, knitr sets the working directory to the folder
+# holding this .Rmd, so the bare filename always resolves.
+csv_path <- here("policy_analysis.csv")
+if (!file.exists(csv_path)) csv_path <- "policy_analysis.csv"
+
+# show_col_types = FALSE suppresses the block of text readr otherwise prints
+# describing how it guessed each column's type. We check the types ourselves in
+# the next section.
+policy_df <- read_csv(csv_path, show_col_types = FALSE)
 
 # print data head
 head(policy_df)
 ```
+
+`read_csv()` is `readr`'s CSV reader. It differs from base R's `read.csv()` in
+three ways that matter: it is much faster on large files, it returns a tibble,
+and it never silently converts text columns into factors.
+
+`head()` shows the first 6 rows. Because the object is a tibble, the printout
+also carries the dimensions and a type abbreviation under every column name:
+`<chr>` for character (text), `<dbl>` for double (a number with decimals).
+
+Two things to notice in that printout. The tibble is 10388 rows by 47 columns,
+so this is country-year panel data: one row per country per year, 212 countries
+from 1970 to 2018. And several columns already show `NA`, R's marker for a
+missing value. `NA` is not zero and not an empty string. It is "we do not know",
+and it propagates: `1 + NA` is `NA`, and `mean(c(1, 2, NA))` is `NA`. That
+propagation is a feature, not a nuisance. It stops a missing value from quietly
+turning into a wrong number.
 
 
 
@@ -54,13 +164,28 @@ head(policy_df)
 
 # 2. Data Checks and Cleaning Approach
 
-We want to check through our dataset before we start analyzing it, or else we're going to waste a lot of time later diverting back and fixing it. 
+We want to check through our dataset before we start analyzing it, or else we're going to waste a lot of time later diverting back and fixing it.
 
 What do we need to look at?
 
 1. Checking column data types. Are numerics in float/int format?
-2. Checking for missing values. Which columns and rows have them? How do we handle this? 
+2. Checking for missing values. Which columns and rows have them? How do we handle this?
 
+### Column data types
+
+Before that chunk runs, three pieces of syntax.
+
+The **pipe**, `%>%`, takes whatever is on its left and passes it as the first
+argument of the function on its right. `policy_df %>% summarise(...)` is exactly
+`summarise(policy_df, ...)`. It exists so that a five-step transformation reads
+top to bottom in the order it happens, instead of inside out. R 4.1 and later
+also has a built-in pipe written `|>`; the two behave the same for our purposes.
+
+`summarise()` collapses a data frame down to a single row of computed values.
+
+`across()` applies the same function to many columns at once. `everything()` is
+a selection helper meaning "all columns", so `across(everything(), typeof)`
+means "run `typeof` on every column".
 
 ```{r}
 # check types
@@ -71,6 +196,23 @@ policy_df %>%
 
 These are mostly `doubles`, which are the correct numeric data types. The others are `character`, equivalent to Python's string data type.
 
+Read the result as a one-row table whose entries are type names rather than
+data. `double` is R's ordinary numeric type, a 64-bit floating point number.
+`character` is text. R also has `integer` (whole numbers only) and `logical`
+(`TRUE`/`FALSE`), neither of which appears here: `read_csv` stores whole numbers
+such as `year` and `partytopledge1` as doubles, which is fine for arithmetic.
+
+Only `cntry`, `country`, `CountryCode`, `wbregion` and `Incomegroup` are
+character. Every other column is numeric and ready for arithmetic, so nothing
+needs converting.
+
+There is a fifth type worth naming now because it appears later: a **factor**.
+A factor is a character column that R treats as a fixed set of categories, with
+the distinct values stored as **levels**. Statistical functions need this
+distinction. When we run the ANOVA in section 7, R has to know that `wbregion`
+is seven groups and not seven pieces of text, and `aov()` converts the character
+column to a factor for us.
+
 ```{r}
 # getting column names
 
@@ -78,7 +220,34 @@ colnames(policy_df)
 ```
 These are the same as in Python!
 
-Regarding missing data, we know from our Python work that there's plenty of it. Again, we'll just be removing `NAN` data en masse. 
+`colnames()` returns a character vector of the 47 column names. The numbers in
+square brackets on the left of the printout are position indices, telling you
+that the item after `[13]` is the thirteenth name. R indexes from 1, not from 0.
+
+The names worth memorizing for today:
+
+- `country`, `year`, `wbregion`, `Incomegroup`: identifiers and grouping
+  variables.
+- `partytopledge1`, `partytopledge2`, `partytopledge3`: 1 if the country is a
+  party to the Kyoto, Copenhagen and Paris agreements respectively, 0 if not.
+- `rel_reduction_low3`, `rel_reduction_high3`: the low and high emission
+  reduction pledged under the third agreement (Paris), in percent.
+- `GHG_percapita`: greenhouse gas emissions per person.
+- `GDP_percapita`: GDP per person.
+
+### Missing values
+
+Regarding missing data, we know from our Python work that there's plenty of it. Again, we'll just be removing `NAN` data en masse.
+
+`is.na(x)` returns a logical vector the same length as `x`, with `TRUE` wherever
+the value is missing. `sum()` on a logical vector counts the `TRUE`s, because R
+treats `TRUE` as 1 and `FALSE` as 0. So `sum(is.na(.x))` is the number of
+missing values in a column.
+
+The `~ sum(is.na(.x))` part is a **lambda**, an unnamed function written inline.
+The tilde starts it, and `.x` stands for whichever column `across()` is
+currently handing over. You need it here because we are not just naming an
+existing function, we are building a small one on the spot.
 
 ```{r}
 # missingness check
@@ -90,17 +259,155 @@ policy_df %>%
 ```
 Our takeaway is that we've got plenty of missing values, in plenty of columns!
 
+A 47-column-wide row of numbers is hard to scan. The same information as a
+picture is easier. To draw it, we first have to turn that wide one-row result
+into a long two-column one, because `ggplot2` wants one row per thing you intend
+to draw.
+
+That reshaping is what **tidy data** means. A dataset is tidy when each variable
+is a column and each observation is a row. Here the observation is "a column of
+`policy_df`" and the variables are its name and its missing count, so tidy form
+is 47 rows of two columns. `pivot_longer()` does the conversion: it takes the
+column names into one new column (`names_to`) and the values into another
+(`values_to`).
+
+```{r missing-plot}
+# Reshape the one-row summary into one row per column of policy_df.
+missing_counts <- policy_df %>%
+  summarise(across(everything(), ~ sum(is.na(.x)))) %>%
+  pivot_longer(
+    cols = everything(),
+    names_to  = "column",     # new column holding the old column names
+    values_to = "n_missing"   # new column holding the counts
+  ) %>%
+  filter(n_missing > 0)       # keep only columns that actually have gaps
+
+# A ggplot is built by adding layers with `+`:
+#   ggplot(data, aes(...)) sets the data and maps columns to visual positions
+#   geom_col()             draws one bar per row, with height taken from y
+#   coord_flip()           swaps the axes so the long names stay readable
+#   labs()                 sets the title and the axis labels
+# reorder(column, n_missing) sorts the bars by height instead of alphabetically.
+ggplot(missing_counts, aes(x = reorder(column, n_missing), y = n_missing)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(
+    title = "Missing values are concentrated in a few columns",
+    subtitle = "28 of the 47 columns contain at least one NA; 10388 rows in total",
+    x = "Column",
+    y = "Number of rows with NA"
+  )
+```
+
+Read the bar chart as a triage list. 28 of the 47 columns have gaps, and the
+damage is very uneven. `upperbound2` is missing in 8624 of 10388 rows, so it is
+effectively unusable. `upperbound1` (7595) is next, then `cpi_inflation` (3610), `upperbound3`
+(3479) and `oil_rents` (2950). The variables we actually need are in better shape: `GHG_percapita` is
+missing 728 times, `GDP_percapita` 2397, `partytopledge3` 1372, `wbregion` 196.
+This is why the cleaning plan below is per-question rather than global. Dropping
+every row with any `NA` anywhere would throw away most of the panel to protect
+columns we never touch.
+
 ### Data Cleaning Plan
 
 We could come up with a general criteria for which rows stay and which we get rid of, to keep a common and standard dataframe. This may involve removing all countries with missing data (a strict approach), or just removing years with missing data, or a combined approach.
 
 However, our focus today is on Hypothesis Testing, with a side of Data Cleaning. So, our process will be to keep all data in the base `policy_df` DataFrame. When we're working on each specific exercise, we'll limit it just to the columns we need to use, and then remove all rows with missing data. This lets us test Hypotheses with the maximum range of available data, and try out data cleaning along the way.
 
+Two functions do the row dropping, and they are near-synonyms here:
+
+- `na.omit()` is base R. It drops every row containing an `NA` in any column.
+- `drop_na()` is from `tidyr`. With no arguments it behaves like `na.omit()`.
+  Given column names, as in `drop_na(GHG_percapita)`, it drops rows missing only
+  in those columns and leaves the rest alone.
+
+Both appear below, because the author used whichever was to hand. Prefer
+`drop_na()` with explicit column names in your own work: it states which
+variables the analysis depends on, so the row count cannot silently change when
+an unrelated column gains a gap.
+
+One consequence to keep in front of you all day. Because each section drops rows
+on its own terms, each section works with a different set of countries. Section
+3 gets 184, section 4 gets 209 plus Canada, section 6 gets 150. The samples are
+not interchangeable and the results are not directly comparable across sections.
+
 
 
 # 3. 1-Tail Hypothesis Test: Are all countries signing onto all 3 agreements?
 
 We'll use this question to see whether there is a high degree of consensus among the agreements being desirable. With a one-sided test, we'll see if most countries sign up onto all 3, or if there is significant non-acceptance.
+
+### What a hypothesis test actually does
+
+This is the part of the workshop people find hardest, so read this before the
+code rather than after it.
+
+We have 184 countries. We can compute their average number of signed agreements
+exactly, and it is 1.663. There is no uncertainty about that number: it is
+arithmetic on the data in front of us. So what is left to test?
+
+The answer is that we are not really interested in these 184 countries as such.
+We treat them as one draw from a wider process that could have come out
+differently, and we want a claim about that process. A different draw would give
+a slightly different average. The question is whether the gap between what we
+observed and what some benchmark claims is bigger than the wobble we would
+expect from the draw alone.
+
+**The null hypothesis, H0**, is the boring benchmark, stated as a specific
+number so that we can compute with it. Here: the true mean number of signed
+agreements is 3. The null is what we assume while doing the arithmetic. We never
+prove it.
+
+**The alternative, H1**, is what we would conclude instead if the data are hard
+to square with H0. Here: the true mean is below 3.
+
+**The test statistic** measures the distance from the data to the null, in units
+of the data's own noise. For a mean, that is the t-statistic:
+
+```
+t = (sample mean - null value) / (sample standard deviation / sqrt(n))
+```
+
+The denominator is the **standard error**, the typical amount the sample mean
+would bounce around from one draw to the next. Dividing by it makes the number
+comparable across problems. A t of -2 means "two standard errors below the
+null", whether we are measuring emissions or exam scores.
+
+**The p-value** is the probability of getting a test statistic at least as
+extreme as the one we got, *if H0 were true*. Small p means the data would be
+surprising under H0.
+
+Now the sentence that matters most, because it is the one people get wrong. The
+p-value is **not** the probability that H0 is true. It is not the probability
+you are wrong. It is a statement about the data given the hypothesis, not about
+the hypothesis given the data. Two consequences follow:
+
+- A large p-value is not evidence that H0 is true. It means the data did not
+  contradict it. Absence of evidence is not evidence of absence, and with a
+  small sample almost nothing contradicts anything.
+- A small p-value says the data are unlikely under H0. It says nothing about
+  whether the difference is large enough to matter. With 7000 observations, a
+  difference too small to care about will still be "significant".
+
+Always report the estimate and the confidence interval alongside the p-value.
+The p-value answers "could this be noise?". The interval answers "how big is
+it?", which is usually the question you actually had.
+
+**One-tailed versus two-tailed.** This is a choice about where you are willing
+to look for a departure from H0, and it must be made before you see the result.
+
+- Two-tailed (`alternative = "two.sided"`) asks: is the true mean different from
+  the null value, in either direction? The 5% is split into 2.5% in each tail.
+- One-tailed (`alternative = "less"` or `"greater"`) asks about one direction
+  only, and puts the whole 5% in that tail. It has more power to detect a
+  departure in the direction you named, at the price of having none at all in
+  the other direction.
+
+Here `"less"` is defensible because 3 is the ceiling. There are exactly three
+agreements, so a country cannot sign more than three and the true mean cannot
+exceed 3. There is no upper tail to test. Note the trap: picking the tail after
+seeing which way the data leaned roughly doubles your false-positive rate. That
+is one of the researcher degrees of freedom problems discussed in section 6.
 
 ### Our Hypotheses
 
@@ -125,6 +432,16 @@ hypothesis_1_df <- policy_df %>%
 head(hypothesis_1_df)
 ```
 
+`select()` keeps the named columns and drops the rest, in the order you list
+them. It is `dplyr`'s column chooser, the counterpart to `filter()`, which
+chooses rows. Note that it does not modify `policy_df`: it returns a new tibble,
+which we assign to `hypothesis_1_df`. R functions almost never change their
+inputs in place, so the original stays intact for the next section.
+
+The three `partytopledge` columns are 0/1 indicators stored as doubles. Because
+they are 0 and 1, adding them gives a count, and averaging them gives a
+proportion. That is the trick we use in this section and again in section 5.
+
 ```{r}
 # NaN check
 missing_values <- hypothesis_1_df %>%
@@ -138,6 +455,20 @@ hypothesis_1_df <- hypothesis_1_df %>%
 
 hypothesis_1_df
 ```
+
+The check shows 1372 missing values in each of the three pledge columns and none
+in `country` or `year`. All three go missing together, which makes sense: the
+gaps are whole countries that are not covered by the pledge data at all, not
+scattered individual years.
+
+`na.omit()` then drops those rows, taking the tibble from 10388 rows to 9016.
+The line after it is just the object's name, which prints it. In an R Markdown
+chunk, a bare expression on its own line is displayed; that is why some chunks
+here use `print()` and some do not. They do the same thing.
+
+Note that this reassigns `hypothesis_1_df` to itself. That is normal in a
+pipeline, but it means re-running the chunk out of order operates on already
+cleaned data. If a count ever looks wrong, restart R and run from the top.
 
 
 There were three different rounds of environmental pledges involved in this dataset:
@@ -156,6 +487,18 @@ hypothesis_1_df <- hypothesis_1_df %>%
 hypothesis_1_df
 ```
 
+`mutate()` adds a column (or overwrites one, if the name already exists) and
+returns the whole data frame. The name on the left of `=` is the new column; the
+expression on the right is evaluated row by row, using the other columns by bare
+name with no quotes and no `policy_df$` prefix. That bare-name convention is
+what makes `dplyr` compact, and it is the main way `dplyr` code differs in feel
+from base R.
+
+The arithmetic is **vectorized**: `partytopledge1 + partytopledge2` adds the two
+columns element by element down all 9016 rows at once. There is no loop, and you
+should not write one.
+
+`total_pledges` now runs from 0 to 3.
 
 ```{r}
 # Group by Country and take the first value of total_pledges for each country
@@ -170,8 +513,68 @@ head(hypothesis_1_sample_df$total_pledges)
 tail(hypothesis_1_sample_df$total_pledges)
 ```
 
+This is the step that turns 9016 country-year rows into 184 country rows, and it
+is the one to understand properly.
 
-### Q1 Hypothesis Testing 
+`group_by()` does not change the data. It attaches a label saying "from now on,
+treat rows sharing a `country` value as one unit". `summarize()` then collapses
+each of those units to a single row. So the pipeline says: split by country,
+take one number per country, stack the results.
+
+`first()` takes the first value in each group. That is legitimate *only* because
+the pledge variables are constant within a country: signing the Paris Agreement
+is a country-level fact recorded identically in every year's row. Verified: no
+country has more than one distinct `total_pledges` value. If the variable did
+move over time, `first()` would silently pick whichever year happened to sort
+first, which is exactly the kind of bug that never announces itself.
+
+Why collapse at all? Because the t-test assumes independent observations. Using
+all 9016 rows would count Canada 49 times, once per year, and those 49 rows
+carry no more information than 1. The sample size would be inflated by a factor
+of roughly 49, the standard error would shrink by a factor of 7, and the
+p-value would be meaninglessly small.
+
+`head()` and `tail()` show the first and last 6 values: `2 1 2 1 2 2` and
+`1 1 0 1 1 1`. The `$` extracts `total_pledges` as a plain numeric vector, which
+is what `t.test()` wants.
+
+The number counts, before we test anything:
+
+```{r pledge-distribution}
+# table() cross-tabulates: it counts how many times each distinct value occurs.
+table(hypothesis_1_sample_df$total_pledges)
+
+# Mean and standard deviation of the 184 country values.
+mean(hypothesis_1_sample_df$total_pledges)
+sd(hypothesis_1_sample_df$total_pledges)
+```
+
+```{r pledge-plot}
+# factor() converts the 0/1/2/3 counts into categories, so ggplot draws four
+# discrete bars instead of a continuous numeric axis.
+#
+# geom_bar() counts the rows itself, unlike geom_col() above which was handed
+# heights directly. after_stat(count) reaches into those computed counts so we
+# can print them on top of the bars.
+ggplot(hypothesis_1_sample_df, aes(x = factor(total_pledges))) +
+  geom_bar(fill = "steelblue") +
+  geom_text(stat = "count", aes(label = after_stat(count)), vjust = -0.4) +
+  labs(
+    title = "Most countries joined one or two of the three agreements",
+    subtitle = "184 countries; sample mean 1.66, null hypothesis value 3",
+    x = "Number of agreements signed (total_pledges)",
+    y = "Number of countries"
+  )
+```
+
+The bar chart is the whole result before any test is run. If the null were even
+roughly right, nearly all 184 bars would sit over 3. Instead the mode is 1 (82
+countries), 58 signed two, only 36 signed all three, and 8 signed none. The
+sample mean of 1.66 is barely more than half the null value of 3, and the
+spread (sd 0.84) is small relative to that gap. A test on this picture is a
+formality, and the size of the t-statistic below reflects that.
+
+### Q1 Hypothesis Testing
 
 
 We will use the base R function, `t.test()`
@@ -192,6 +595,22 @@ The relevant arguments are:
 
 We can assign it to a variable called `test_result`, and then extract the t-stat and p-values with `$statistic` and `$p.value`
 
+The chunk above is marked `eval=FALSE` in its header, which tells knitr to
+display the code but not run it. `?t.test` opens a help viewer, which makes no
+sense during a knit.
+
+On the argument `alternative`, note that it describes H1, not H0. `"less"` means
+"the alternative is that the true mean is less than `mu`", so the p-value is
+computed from the left tail only. Getting this backwards is a common error and R
+will not warn you.
+
+One more thing about `test_result`. It is a **list**: a container that, unlike a
+vector, can hold pieces of different types and shapes under names. `t.test()`
+returns the statistic, the p-value, the degrees of freedom, the confidence
+interval and the estimate all in one object. `$` pulls out one named piece, the
+same operator that pulls a column out of a data frame. Run `names(test_result)`
+in the console to see everything available.
+
 ```{r}
 # Conduct one-sample t-test
 test_result <- t.test(hypothesis_1_sample_df$total_pledges, mu = 3, alternative = "less")
@@ -205,6 +624,52 @@ cat("Test Statistic: ", test_statistic, "\n")
 cat("P-value: ", p_value, "\n")
 ```
 
+`cat()` prints its arguments joined together with no quotes and no `[1]` index
+marker, which is why it is used instead of `print()` for these one-line reports.
+`"\n"` is a newline; without it the next `cat()` would continue on the same
+line.
+
+### Q1: how to read this output
+
+t = -21.591 and p = 1.67e-52. Take them one at a time.
+
+The t-statistic is arithmetic you can check by hand:
+
+```
+standard error = 0.8399 / sqrt(184)      = 0.0619
+t              = (1.6630 - 3) / 0.0619   = -21.59
+```
+
+So the sample mean sits about 21.6 standard errors below 3. For reference, the
+5% one-tailed critical value at 183 degrees of freedom is about -1.65. We are
+past it by an order of magnitude.
+
+**Degrees of freedom** is 183, which is n - 1. One degree of freedom is spent
+estimating the mean, so 183 independent pieces of information remain for
+estimating the spread. The t distribution is wider than the normal at small df
+to account for that extra uncertainty, and converges to the normal as df grows.
+
+p = 1.67e-52 is scientific notation for 0.00000...167 with 51 zeros after the
+decimal point. Read it as "essentially zero". Under H0, a sample this far below
+3 would essentially never happen. We reject H0 at any conventional significance
+level.
+
+Do not over-read the tiny p-value. It does not mean the result is 52 times more
+important than a p of 0.001. Below roughly 1e-10 the number is an artifact of
+the assumed t distribution in a region no dataset can actually inform. All it
+tells you is "not noise". The size of the effect is in the means: 1.66 against
+3, a shortfall of 1.34 agreements per country.
+
+The substantive conclusion: there is no near-universal consensus. Signing all
+three is the exception, not the rule.
+
+A caution about the model, since this is the first test. A t-test assumes the
+sample mean is approximately normally distributed. Here the underlying variable
+takes only the values 0, 1, 2 and 3, so it is nowhere near normal. That is
+usually fine, because the Central Limit Theorem applies to the *mean*, not to
+the raw data, and n = 184 is ample. It also barely matters here: no reasonable
+adjustment moves a t of -21.6 anywhere near the boundary.
+
 
 # 4. 2-Tail Hypothesis Test: Are Canada's emissions average?
 
@@ -214,11 +679,23 @@ Now we'll be doing a two-sided hypothesis test, where we compare a series of dat
 ### Our Hypotheses
 
 - H0: Most countries' average per-capita carbon emissions are equal to Canadian values
-- H1: Most countries' average per-capita carbon emissions are not equal to Canadian values 
+- H1: Most countries' average per-capita carbon emissions are not equal to Canadian values
 
 ### Steps
 
 We are going to take Canada's average per capita carbon emissions and compare them to all other countries. Are other countries significantly greater or lower than us?
+
+The structure differs from section 3 in exactly one respect: `alternative` is
+left at its default of `"two.sided"`. We have no reason in advance to expect the
+rest of the world to be above rather than below Canada, so we test for a
+difference in either direction and split the 5% into 2.5% per tail.
+
+Note what the test does and does not treat as uncertain. Canada's average is
+plugged in as `mu`, a fixed known constant. The test therefore asks whether the
+*other countries'* mean differs from that number. It does not put a standard
+error on Canada's own average, so it is not a comparison of two samples. If you
+wanted that, you would need a two-sample test on the underlying country-year
+observations, which is a different question with a different answer.
 
 
 
@@ -243,6 +720,27 @@ hypothesis_2_df <- hypothesis_2_df %>%
 
 ```
 
+Four things happen in that chunk.
+
+`drop_na()` removes the 728 rows where `GHG_percapita` is missing. Because we
+selected only two columns first, no other column can trigger a drop.
+
+`summarise(avg_emissions = mean(GHG_percapita))` collapses each country to one
+row again, but this time with a genuine average over its years rather than
+`first()`. `GHG_percapita` moves over time, so taking the first value would be a
+choice about which year, and averaging is the honest summary. The result has a
+new name, `avg_emissions`, which is worth noticing: from here on the column is
+called `avg_emissions`, not `GHG_percapita`.
+
+`filter()` keeps rows where a condition is `TRUE`. `==` tests equality and `!=`
+tests inequality. Two equals signs, not one: a single `=` is assignment or a
+named argument, and using it here is an error. `filter()` also drops `NA` rows
+automatically, since `NA == "Canada"` is `NA`, not `TRUE`.
+
+The two filters partition the 210 countries into Canada (1) and everyone else
+(209). Reassigning `hypothesis_2_df` in the last step is the usual overwrite:
+after this chunk the name refers to the 209, not the 210.
+
 ```{r}
 head(hypothesis_2_df$avg_emissions)
 
@@ -252,6 +750,59 @@ tail(hypothesis_2_df$avg_emissions)
 ```{r}
 hypothesis_2_canada
 ```
+
+Canada's country-average per-capita emissions are 22.92. Compare that with the
+first six non-Canada values printed above, which run from about 1.0 to 6.8.
+Canada is not close to those. Whether that is a general pattern or six unlucky
+draws is what the test settles.
+
+Look at the distribution before testing it:
+
+```{r emissions-distribution}
+# Summary statistics for the 209 non-Canada countries.
+summary(hypothesis_2_df$avg_emissions)
+
+# How many countries emit more per person than Canada?
+sum(hypothesis_2_df$avg_emissions > hypothesis_2_canada$avg_emissions)
+```
+
+```{r emissions-plot}
+# geom_histogram bins a continuous variable and counts rows per bin.
+# binwidth = 5 sets bins 5 tonnes wide; color = "white" outlines the bars.
+# geom_vline draws a vertical reference line at a fixed x position.
+ggplot(hypothesis_2_df, aes(x = avg_emissions)) +
+  geom_histogram(binwidth = 5, fill = "steelblue", color = "white") +
+  geom_vline(
+    xintercept = mean(hypothesis_2_df$avg_emissions),
+    color = "black", linewidth = 1
+  ) +
+  geom_vline(
+    xintercept = hypothesis_2_canada$avg_emissions,
+    color = "red", linetype = "dashed", linewidth = 1
+  ) +
+  annotate("text", x = 30, y = 60, label = "Canada = 22.9",
+           color = "red", hjust = 0) +
+  annotate("text", x = 30, y = 52, label = "World mean = 9.3", hjust = 0) +
+  labs(
+    title = "Canada sits in the right tail of the world emissions distribution",
+    subtitle = "Country averages of GHG per capita, 209 countries excluding Canada",
+    x = "Average GHG per capita (country mean over all available years)",
+    y = "Number of countries"
+  )
+```
+
+The histogram explains the test result before the test runs. The distribution is
+severely right-skewed: 117 of the 209 countries fall below 5 and 143 fall below
+7.5, the median is 3.99, and a thin tail stretches out past 180. The solid black line marks the
+mean of 9.30, already pulled well above the median by that tail. The dashed red
+line at Canada's 22.92 sits far to the right of the bulk. Only 14 of 209
+countries emit more per person than Canada.
+
+The skew matters for two reasons. First, "average" is ambiguous: Canada is 2.5
+times the mean but 5.7 times the median. Second, the t-test relies on the
+sampling distribution of the mean being roughly normal. With n = 209 that is a
+reasonable bet even for skewed data, but with a much smaller sample it would
+not be.
 
 
 ### Q2 Hypothesis Testing
@@ -275,13 +826,89 @@ cat("Test Statistic: ", test_statistic, "\n")
 cat("P-value: ", p_value, "\n")
 ```
 
+Two notes on the code. `hypothesis_2_canada_values` is a vector of length 1, so
+`mean()` of it is just that one number; the call is harmless but the `mean()` is
+doing nothing. And `alternative` is absent, so it defaults to `"two.sided"`,
+which is what section 4 wants.
+
+Also notice that `test_result` is being reused. The same name held the section 3
+result. R overwrites it without complaint. That is fine as long as the document
+is run top to bottom, and a trap if it is not.
+
 ### Q2 Interpretation?
+
+t = -10.054, p = 1.24e-19, on 208 degrees of freedom. Reject H0.
+
+The arithmetic again:
+
+```
+standard error = 19.584 / sqrt(209)       = 1.355
+t              = (9.298 - 22.917) / 1.355 = -10.05
+```
+
+The negative sign says the rest of the world is *below* Canada. Because the test
+is two-tailed, the p-value counts both tails: it is the probability of a t below
+-10.05 plus the probability of a t above +10.05. That doubling is why a
+two-tailed p-value is twice the corresponding one-tailed p-value for the same
+data. Here doubling a number that small changes nothing.
+
+Print the full object rather than just two extracted numbers, and you get the
+piece that actually answers the economics:
+
+```{r q2-full-output}
+test_result
+```
+
+The 95 percent confidence interval is [6.63, 11.97]. Read it as the range of
+null values that this sample would *not* reject. Canada's 22.92 is nowhere near
+it. The interval is the useful output here, more so than the p-value: it says
+the typical country emits somewhere between about 6.6 and 12.0 tonnes per
+person, against Canada's 22.9. Canada is roughly twice the top of that range.
+
+To make the two-tailed logic visible:
+
+```{r t-distribution-plot}
+# Build the t density curve for 208 degrees of freedom.
+t_grid <- tibble(t = seq(-4, 4, length.out = 600)) %>%
+  mutate(density = dt(t, df = 208))          # dt() = t probability density
+
+# qt() is the inverse: the t value with 97.5% of the area to its left.
+# For a two-tailed 5% test, reject outside plus or minus this value.
+crit <- qt(0.975, df = 208)
+
+ggplot(t_grid, aes(x = t, y = density)) +
+  geom_area(data = filter(t_grid, t <= -crit), fill = "firebrick", alpha = 0.6) +
+  geom_area(data = filter(t_grid, t >=  crit), fill = "firebrick", alpha = 0.6) +
+  geom_line(linewidth = 0.8) +
+  annotate("text", x = -3.1, y = 0.06, label = "reject H0\n2.5%",
+           color = "firebrick", size = 3.5) +
+  annotate("text", x = 3.1, y = 0.06, label = "reject H0\n2.5%",
+           color = "firebrick", size = 3.5) +
+  labs(
+    title = "Two-tailed rejection regions, t distribution with 208 df",
+    subtitle = paste0("Critical values at +/- ", round(crit, 3),
+                      "; observed t = -10.05 is far off the left of this plot"),
+    x = "t statistic",
+    y = "Probability density"
+  )
+```
+
+The curve is the distribution the t-statistic would follow if H0 were true. The
+two shaded wedges hold 2.5% of the area each, and their inner edges are the
+critical values at plus and minus 1.971. Any observed t landing in the red is
+declared too unlikely under H0. Our observed t of -10.05 is not on this plot at
+all: it is two and a half plot-widths further left. That distance is what
+p = 1.24e-19 encodes.
+
+Compare this picture with the one-tailed test in section 3, where the whole 5%
+would sit in a single wedge on the left and the right tail would carry no
+rejection region at all.
 
 
 
 # 5. Proportion Comparison Test: Are high-income countries more likely to make emission reduction pledges?
 
-The environmental Kuznets Curve suggests we might see an inverted-U relationship of carbon emissions with national wealth. 
+The environmental Kuznets Curve suggests we might see an inverted-U relationship of carbon emissions with national wealth.
 
 - at low wealth levels, countries don't produce enough to cause high carbon emissions
 
@@ -304,6 +931,17 @@ We will investigate this effect by seeing whether High Income countries are more
 2. Subset out the High Income countries
 3. Compute average for High Income, and not-High Income countries
 4. Compare using statistical test
+
+The outcome here is binary: a country either is or is not a party to the Paris
+Agreement. `partytopledge3` codes that as 1 or 0, so the mean of the column *is*
+the proportion of signatories. That is why the same `mean()` you have been using
+for emissions now reads as a percentage.
+
+`Incomegroup` is a World Bank classification with four values in this file:
+"High income" (3381 rows), "Upper middle income" (2646), "Lower middle income"
+(2205) and "Low income" (1470), plus 686 rows where it is missing. The code
+below splits on "High income" versus everything else, which folds the three
+lower categories into one comparison group.
 
 
 
@@ -350,6 +988,20 @@ hypothesis_3_not_hi_group <- hypothesis_3_not_hi %>%
 
 ```
 
+The two blocks are the same four steps run on complementary subsets: filter to
+the income group, drop rows with missing values, then collapse to one row per
+country by taking `first()`. As in section 3, `first()` is safe because
+`partytopledge3` does not vary within a country.
+
+Order matters in a way that is easy to miss. `filter()` runs before `drop_na()`,
+so a country whose `Incomegroup` is missing is excluded from *both* groups: it
+fails `== "High income"` and it fails `!= "High income"`, because a comparison
+with `NA` returns `NA`, not `TRUE`. The two groups therefore do not have to add
+up to the full country list, and they do not: 55 + 126 = 181, not 212.
+
+The `summarise()` output keeps the name `partytopledge3` even though it now
+holds one value per country rather than one per country-year. Reusing the name
+is convenient and slightly misleading. `paris_member` would have been clearer.
 
 ```{r}
 cat("Proportion of High Income countries signing Paris Climate Agreement: ", mean(hypothesis_3_hi_group$partytopledge3), "\n")
@@ -363,6 +1015,55 @@ cat("Number of signatory non-high income countries: ", sum(hypothesis_3_not_hi_g
 cat("Number of non-high income countries: ", length(hypothesis_3_not_hi_group$country), "\n")
 ```
 
+Three functions on the same 0/1 column give three different readings of it.
+`mean()` is the proportion, `sum()` is the count of 1s, and `length()` is the
+number of countries. `length()` on the `country` column is a slightly indirect
+way of asking for the row count; `nrow(hypothesis_3_hi_group)` says the same
+thing more plainly.
+
+The numbers: 53 of 55 high-income countries have joined (96.36%), and 121 of 126
+others have (96.03%). The gap is 0.33 percentage points, which is two countries'
+worth of rounding. There is nothing here for a test to find, and the point of
+running one is to confirm that reading rather than to discover something.
+
+```{r proportion-plot}
+# Assemble a small tibble by hand with tibble(), one row per group. Building a
+# two-row table like this is often the fastest way to get a summary into ggplot.
+proportion_summary <- tibble(
+  group  = c("High income", "Not high income"),
+  signed = c(sum(hypothesis_3_hi_group$partytopledge3),
+             sum(hypothesis_3_not_hi_group$partytopledge3)),
+  total  = c(nrow(hypothesis_3_hi_group),
+             nrow(hypothesis_3_not_hi_group))
+) %>%
+  mutate(proportion = signed / total)
+
+pooled <- sum(proportion_summary$signed) / sum(proportion_summary$total)
+
+ggplot(proportion_summary, aes(x = group, y = proportion, fill = group)) +
+  geom_col(width = 0.55, show.legend = FALSE) +
+  geom_hline(yintercept = pooled, linetype = "dashed") +
+  # paste0() glues strings together with no separator; round() trims decimals.
+  geom_text(aes(label = paste0(signed, " of ", total, " (",
+                               round(100 * proportion, 1), "%)")),
+            vjust = -0.5) +
+  # Force the y axis onto the full 0-1 range so the bars are not misleading.
+  coord_cartesian(ylim = c(0, 1.08)) +
+  labs(
+    title = "Paris Agreement membership is near universal in both income groups",
+    subtitle = paste0("Dashed line is the pooled proportion, ",
+                      round(pooled, 4)),
+    x = "Income group",
+    y = "Proportion that joined the Paris Agreement"
+  )
+```
+
+Both bars are essentially at the top of the chart and essentially at the same
+height. That is the finding. The dashed pooled line at 0.9613 passes through
+both bars. Drawing the y axis over its full 0 to 1 range is deliberate: had it
+been auto-scaled to the range 0.960 to 0.964, the 0.33 percentage point gap
+would have filled the plot and looked enormous. Truncated axes are the easiest
+way to make a null result look like a discovery.
 
 ### Q3 Hypothesis Testing
 
@@ -386,6 +1087,25 @@ We also use:
 ?prop.test
 ```
 
+Two more arguments matter here.
+
+`correct` switches Yates' continuity correction on or off. The correction shrinks
+the test statistic slightly to compensate for approximating a discrete count
+distribution with a continuous curve. It is `TRUE` by default. Setting
+`correct = FALSE` is what makes the R result match the uncorrected z-test that
+`statsmodels.proportions_ztest()` computed in Python. Use `FALSE` when you want
+that match; the default `TRUE` is the more conservative choice.
+
+Note also that `c()` builds a vector, and the *order* of the two entries has to
+be the same in `x` and in `n`. Here the first slot is high income and the second
+is everyone else. Swapping one but not the other silently tests a different
+hypothesis.
+
+`prop.test()` reports a **chi-squared** statistic, not a z. For a two-group
+comparison the two are related by `z = sqrt(chi-squared)`, which is why the
+author takes a square root on the last line. The chi-squared version loses the
+sign, so it cannot tell you which group was higher; read that off the two
+proportions instead.
 
 ```{r}
 # x: we have 53 signatory HI countries and 121 signatory non_HI countries
@@ -400,7 +1120,74 @@ sqrt(z_test$statistic) # z-score
 
 ```
 
+Those four counts are typed in by hand, copied from the two `cat()` blocks
+above. That is fragile: change a filter upstream and the test keeps using the
+old numbers without complaint. The same call driven off the data:
+
+```{r prop-test-computed}
+# Same test, with the counts read out of the data rather than typed in.
+z_test_computed <- prop.test(
+  x = c(sum(hypothesis_3_hi_group$partytopledge3),
+        sum(hypothesis_3_not_hi_group$partytopledge3)),
+  n = c(nrow(hypothesis_3_hi_group),
+        nrow(hypothesis_3_not_hi_group)),
+  alternative = "two.sided",
+  correct = FALSE
+)
+
+cat("chi-squared:", z_test_computed$statistic, "\n")
+cat("p-value:    ", z_test_computed$p.value, "\n")
+# as.numeric() strips the "X-squared" name that R carries along, which would
+# otherwise mislabel the z-score in the printout.
+cat("z-score:    ", as.numeric(sqrt(z_test_computed$statistic)), "\n")
+```
+
+Identical results, and now the chunk cannot go stale.
+
 ### Q3 Interp
+
+X-squared = 0.011344 on 1 degree of freedom, p = 0.9152, z = 0.1065. Do not
+reject H0.
+
+A z of 0.107 means the observed difference is about one tenth of one standard
+error. Under H0 you would see a gap this large or larger 92% of the time. The
+confidence interval for the difference in proportions, printed in the output
+above, runs from -0.0568 to +0.0634: it comfortably contains zero, and it also
+tells you the data could not have detected a gap smaller than about 6
+percentage points either way. That is a statement about the study's precision,
+which is more informative than "not significant".
+
+Say this carefully. We have **not** shown that income group is irrelevant to
+joining the Paris Agreement. We have shown that with 55 and 126 countries at 96%
+membership on both sides, there is no room for a difference to show up. Almost
+everybody joined. The ceiling, not the income effect, is doing the work.
+
+R also emits a warning: `Chi-squared approximation may be incorrect`. That is
+real and worth reading. The chi-squared approximation wants an expected count of
+at least 5 in every cell of the 2x2 table, and the non-signer cells hold only 2
+and 5 observed countries. With counts that small the approximation is shaky.
+`fisher.test()` computes the exact answer for a table this size and is the right
+tool when a cell is thin:
+
+```{r fisher-check}
+# Build the 2x2 contingency table the test works on:
+#   row 1 = high income, row 2 = not high income
+#   col 1 = signed, col 2 = did not sign
+paris_table <- matrix(
+  c(53, 55 - 53,
+    121, 126 - 121),
+  nrow = 2, byrow = TRUE,
+  dimnames = list(income = c("High income", "Not high income"),
+                  paris  = c("Signed", "Did not sign"))
+)
+paris_table
+
+fisher.test(paris_table)
+```
+
+Fisher's exact test gives p = 1, and its odds-ratio interval spans 1 by a wide
+margin. Same conclusion as `prop.test()`, arrived at without the approximation,
+and without the warning.
 
 
 
@@ -410,13 +1197,19 @@ sqrt(z_test$statistic) # z-score
 
 So if High Income countries are more likely to sign onto climate agreements than Mid/Low-Income countries, how do they behave after signing?
 
-We're going to analyze this question by taking the mean emission reduction done by High Income countries and compare it with that of other countries. Since we don't have a strong reason to assume it will be one or the other, we will use a two-tailed test. 
+We're going to analyze this question by taking the mean emission reduction done by High Income countries and compare it with that of other countries. Since we don't have a strong reason to assume it will be one or the other, we will use a two-tailed test.
 
 Our reductions will come from the `rel_reduction____` variables. The "rel" part marks these as "relative" emissions. This actually means two things!
 
-1. The reductions are *relative* to their levels at the start of the agreement coming into force. 1 is Kyoto, 2 is Copenhagen, 3 is Paris. 
+1. The reductions are *relative* to their levels at the start of the agreement coming into force. 1 is Kyoto, 2 is Copenhagen, 3 is Paris.
 
 2. The reductions are proportional: pledging `23.4` emissions reductions means to promise to decrease by 23.4%.
+
+Sign convention, because it decides how every number below reads. In this file
+`rel_reduction_low3` is stored so that a *positive* value is a pledged
+reduction and a *negative* value is a pledged increase. Latvia's -472 is not a
+472% cut; it is an implied 472% rise relative to its baseline, which is what
+makes it an outlier rather than a hero.
 
 
 
@@ -437,7 +1230,20 @@ Any of these *could* be reasonable. We could even transform the data into propor
 
 If you're somehow committed to a specific result, you may be tempted to run a number of these, and report the result most favorable to your views. Or, run just the one you think will give the most convenient result and not explore any others.
 
-"Researcher degrees of freedom" refers to this flexibility in how statistical analyses are designed and reported, and plays a major role in the Replication Crisis affecting much of academic social science. Economics is less badly affected than the worst offenders (psychology, sociology), but it's still a serious concern. 
+"Researcher degrees of freedom" refers to this flexibility in how statistical analyses are designed and reported, and plays a major role in the Replication Crisis affecting much of academic social science. Economics is less badly affected than the worst offenders (psychology, sociology), but it's still a serious concern.
+
+Put a number on it. Six outcome variables, times two income splits, times three
+choices about outliers, times two tail choices, is 72 tests. If every one of
+them were pure noise, the chance that at least one comes back significant at 5%
+is about 97%. Reporting only that one is not fraud in the ordinary sense; each
+step feels defensible on its own. That is exactly why it is the hard problem.
+
+The defenses are procedural, not statistical: fix the specification before you
+look at the outcome, say what you fixed, and report the tests you ran and not
+only the ones that worked. Where a set of tests genuinely has to be run
+together, adjust for it. `p.adjust()` in base R implements Bonferroni and
+Benjamini-Hochberg corrections, and section 7's `TukeyHSD()` is the same idea
+applied to all pairs of groups.
 
 
 ### Our specification and why
@@ -447,6 +1253,9 @@ We will be taking the most recent pledge round, the Paris Agreement, and using t
 1. This uses pledges currently in place. We will suggest that climate change is being taken more seriously as of late, due to the rise in heat waves and changing weather patterns resulting from it.
 
 2. We will use the `low` value to be cynical about countries' pledges. If rich countries really are shirking, we'd see it in their lower-bound pledges.
+
+That reasoning is stated before the data are touched, and it is stated in public.
+Both properties are what make it a specification rather than a rationalization.
 
 ### Our Hypotheses
 
@@ -483,8 +1292,38 @@ hypothesis_4_not_hi_df <- hypothesis_4_df %>%
 
 ```
 
+Three details in that chunk.
+
+`slice(1)` keeps the first *row* of each group, where the `summarise(first(...))`
+pattern from earlier kept the first *value* of one column. The difference is
+that `slice()` retains every column, which is what we need here because we still
+want `Incomegroup` afterwards. Both are equally exposed to the same assumption:
+that the value does not vary within a country.
+
+`ungroup()` removes the grouping label that `group_by()` attached. Forgetting it
+is a classic source of confusion, because subsequent `mutate()` or `summarise()`
+calls would keep operating group by group and produce results you did not ask
+for. Make a habit of ungrouping as soon as the grouped operation is finished.
+
+The row counts: 10388 down to 7350 after `drop_na()`, which removes rows missing
+`rel_reduction_low3` (2891 of them) or `Incomegroup` (686), with some overlap
+between the two. Then down to 150 rows after `slice(1)`, one per country. Of
+those, 52 are high income and 98 are not. This is a much smaller sample than
+section 5's 181, on the same underlying data, because a country can be a party
+to Paris without a numeric pledge recorded here.
+
 
 As we remember from yesterday, Latvia's value was *quite* the outlier among the rich countries, as was Kiribati's in the non-rich countries.
+
+Before the plot, one warning about how it is constructed. There is no meaningful
+x variable for these two charts. The author builds an index `1, 2, 3, ...` purely
+to spread the points out horizontally so they do not overlap. The horizontal
+position of a point carries no information: it is just that country's position
+in the sorted-by-name data frame. Only the vertical position means anything.
+
+`seq_len(n)` generates `1, 2, ..., n`. Writing it as `seq_len(nrow(df))` rather
+than a hard-coded `seq(1, 51)` means the length automatically tracks the data,
+so an upstream change cannot leave the x and y vectors mismatched.
 
 
 ```{r}
@@ -498,29 +1337,47 @@ hypothesis_4_hi_nolatvia_df <- hypothesis_4_hi_df %>%
   filter(country != "Latvia")
 
 # Make x range, get y values
-x <- seq(1, 51)
+# seq_len(nrow(...)) is 1:51 here, and stays correct if the data changes.
+x <- seq_len(nrow(hypothesis_4_hi_nolatvia_df))
 y <- hypothesis_4_hi_nolatvia_df$rel_reduction_low3
 
 # Create scatter plot
 plot <- ggplot(data = hypothesis_4_hi_nolatvia_df, aes(x = x, y = y)) +
   geom_point() +
-  geom_point(data = latvia_df, aes(x = 25, y = -472), color = "red", shape = 19) +
-  geom_text(data = latvia_df, aes(x = 25, y = -460, label = "Latvia"), vjust = 0) +
-  
+  # A second geom_point layer with its own data: one red dot for Latvia,
+  # placed at x = 25 (mid-plot) and at Latvia's actual y value.
+  geom_point(data = latvia_df, aes(x = 25, y = rel_reduction_low3), color = "red", shape = 19) +
+  geom_text(data = latvia_df, aes(x = 25, y = rel_reduction_low3 + 15, label = "Latvia"), vjust = 0) +
+
   # Axis labels
   labs(y = "Paris Agreement Emission Reduction Pledges") +
-  
+
+  # Added: the x axis is an arbitrary index, and saying so on the plot avoids
+  # readers inventing a meaning for it.
+  labs(x = "Country index (no meaning, spacing only)") +
+
   # Plot title
   labs(title = "What the Hell, Latvia?")
 
 print(plot)
 ```
 
-For Kiribati's case: 
+Every high-income country except Latvia sits in a band between about -130 and
++85. Latvia, the red point, is at -472. It is roughly three and a half times
+further from the pack than the next most extreme value, and it drags the
+high-income mean from +9.2 down to -0.04 on its own. One country out of 52
+moving the group average by 9 units is the definition of an influential
+observation.
+
+Repeated `labs()` calls are fine, by the way. Each one adds to the label set
+rather than replacing it, so the three calls above could equally be written as
+one `labs(x = ..., y = ..., title = ...)`.
+
+For Kiribati's case:
 
 ```{r}
 # Make x range, get y values, and labels
-x <- seq(1, 98)
+x <- seq_len(nrow(hypothesis_4_not_hi_df))
 y <- hypothesis_4_not_hi_df$rel_reduction_low3
 labels <- hypothesis_4_not_hi_df$country
 
@@ -528,15 +1385,63 @@ labels <- hypothesis_4_not_hi_df$country
 plot <- ggplot(data = hypothesis_4_not_hi_df, aes(x = x, y = y)) +
   geom_point() +
   geom_text(aes(label = labels), vjust = 1.5, hjust = 0.5, size = 3) +
-  
+
   # Axis labels
   labs(y = "Paris Agreement Emission Reduction Pledges") +
-  
+  labs(x = "Country index (no meaning, spacing only)") +
+
   # Plot title
   labs(title = "Non-High Income Paris Pledges")
 
 print(plot)
 ```
+
+This plot is dominated by a single point at -86,515: Kiribati. Everything else
+is compressed into a flat line near zero, and the 98 country labels overlap into
+an unreadable smear along it. Both problems are worth seeing rather than fixing,
+because they are what an outlier of this magnitude does to a chart. Kiribati's
+value is roughly 180 times Latvia's and 300 times the next largest non-high-income
+value, which is Madagascar at -280.
+
+A cleaner version of the same data, with the extreme values excluded and the
+labels dropped:
+
+```{r pledges-clean-plot}
+# Combine the two groups into one tibble with a group label, so ggplot can
+# color by it. bind_rows() stacks data frames vertically.
+pledges_long <- bind_rows(
+  hypothesis_4_hi_df     %>% mutate(group = "High income"),
+  hypothesis_4_not_hi_df %>% mutate(group = "Not high income")
+) %>%
+  filter(!country %in% c("Latvia", "Kiribati", "Madagascar"))
+
+# %in% tests membership in a vector; ! negates it. So this keeps every country
+# that is not one of the three named outliers.
+
+ggplot(pledges_long, aes(x = group, y = rel_reduction_low3, fill = group)) +
+  # A boxplot shows the median (thick line), the middle 50% of values (box),
+  # and the reach of the non-outlying values (whiskers).
+  geom_boxplot(alpha = 0.4, outlier.shape = NA, show.legend = FALSE) +
+  # Jitter nudges points sideways at random so overlapping values stay visible.
+  geom_jitter(width = 0.12, alpha = 0.6, size = 1.6, show.legend = FALSE) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(
+    title = "Paris pledges overlap almost completely across income groups",
+    subtitle = "Latvia, Kiribati and Madagascar removed; 51 and 96 countries",
+    x = "Income group",
+    y = "Paris Agreement pledged reduction, low bound (percent)"
+  )
+```
+
+The two boxes overlap over nearly their whole range. High-income countries have
+a higher median (13.7 against 0.0) and a mean of 9.2 against -1.3, but the
+not-high-income group is far more dispersed: its standard deviation is 60.3
+against 28.7, and it holds both the largest cut (+340) and the largest implied
+increase (-200) in the trimmed data. The dashed line at zero separates pledged
+cuts from pledged increases; both groups have members on both sides. A visible
+difference in center combined with heavy overlap and unequal spread is exactly
+the configuration that produces a non-significant t-test, which is what happens
+below.
 
 We'll run the same two hypothesis tests comparing the two reductions, with and without outliers.
 
@@ -550,15 +1455,35 @@ mean(hypothesis_4_not_hi_df$rel_reduction_low3) # same value as in python
 var(hypothesis_4_not_hi_df$rel_reduction_low3) # again same value
 ```
 
+`var()` is the variance, the squared standard deviation. Read these four numbers
+together before running any test.
+
+The high-income mean is -0.037 with a variance of 5267, so a standard deviation
+of about 73. The not-high-income mean is -887 with a variance of 76,373,436, so
+a standard deviation of about 8739. The second group's spread is 120 times the
+first group's. Both figures are entirely driven by the outliers just plotted:
+Kiribati alone accounts for essentially all of that variance.
+
+This is the situation Welch's t-test exists for. R's `t.test()` defaults to
+Welch, which does not assume the two groups share a variance and adjusts the
+degrees of freedom downward instead. That is why the df below comes out as
+97.03 rather than a whole number.
+
 T-test:
 
 ```{r, eval=FALSE}
 ?t.test
 ```
 
-Unlike in Python, where we used a new function, we can get by just with the same `t.test()` function in R. 
+Unlike in Python, where we used a new function, we can get by just with the same `t.test()` function in R.
 
 We do add a second data vector, however. Now we use both `x` and `y`.
+
+The null hypothesis changes shape when you supply two samples. With one sample
+and `mu`, H0 was "this mean equals that fixed number". With `x` and `y`, H0 is
+"these two population means are equal", and `mu` defaults to 0, meaning a zero
+difference. R keeps the same function name and infers which test you want from
+which arguments you supply.
 
 ```{r}
 # Two-sample t-test
@@ -569,9 +1494,24 @@ cat("T-statistic:", t_test_result$statistic, "\n")
 cat("P-value:", t_test_result$p.value, "\n")
 ```
 
+t = 1.0046, p = 0.3176, on 97.03 degrees of freedom. Under H0 you would see a
+gap this large or larger about 32% of the time, so do not reject.
+
+The estimated difference in means is about 887 percentage points, which is
+enormous, and the test still finds nothing. That combination is the lesson of
+this chunk. The difference is enormous because Kiribati is in the sample, and
+the standard error is even more enormous for the same reason. When one
+observation drives both the estimate and its uncertainty, the test has nothing
+to work with.
+
 Based on this result, we would conclude that High and not-High Income countries are not making (statistically) significantly different reduction pledges.
 
 But we saw that Latvia and Kiribati are extreme outliers. The paper mentioned Madagascar as well. What if we remove them?
+
+Removing outliers is a researcher degree of freedom of exactly the kind
+described above, so state the rule and show both results. That is what the next
+chunk does: it prints the trimmed test *alongside* the full-sample test rather
+than replacing it.
 
 ```{r}
 # Make high income df without Latvia
@@ -590,6 +1530,31 @@ cat("T-statistic:", t_test_result$statistic, "\n")
 cat("P-value:", t_test_result$p.value, "\n")
 ```
 
+`&` is logical AND, applied element by element down the column, so the filter
+keeps rows that are neither Kiribati nor Madagascar. `|` is OR and `!` is NOT.
+Note that `country != "Kiribati" & country != "Madagascar"` is the same as
+`!country %in% c("Kiribati", "Madagascar")`, which scales better once the list
+grows past two.
+
+t = 1.4313, p = 0.1545, on 143.67 degrees of freedom. Still not significant at
+5%, but the picture underneath has changed completely:
+
+| Sample | n (HI) | n (other) | mean HI | mean other | t | p |
+|---|---|---|---|---|---|---|
+| All countries | 52 | 98 | -0.04 | -886.93 | 1.005 | 0.318 |
+| Outliers removed | 51 | 96 | 9.22 | -1.29 | 1.431 | 0.155 |
+
+Removing three countries out of 150 flips the sign of the estimated gap from
+strongly negative to positive, and moves the difference in means from 887 to
+10.5. The p-value barely moves because both the numerator and the denominator
+of the t-statistic collapse together. Notice also that the degrees of freedom
+jump from 97 to 144: with the variances now comparable, Welch's adjustment costs
+much less.
+
+The honest summary of section 6 is that the data cannot answer the question. The
+result is not significant either way, and the point estimate is not stable to
+dropping three observations out of 150.
+
 
 
 ```{r}
@@ -603,20 +1568,24 @@ length(seq(1,51))
 
 # Create a data frame for plotting
 plot_data <- data.frame(
-  x = c(seq(1, 51), seq(1, 96)),
+  # seq_along(v) is seq_len(length(v)): 1..51 and 1..96 here. Deriving the index
+  # from the data means the x and y vectors cannot fall out of sync.
+  x = c(seq_along(data_series1), seq_along(data_series2)),
   y = c(data_series1, data_series2),
+  # rep() repeats the first vector's elements the number of times given in the
+  # second, producing 51 "High Income" labels then 96 "Not High Income" ones.
   group = rep(c("High Income", "Not High Income"), c(length(data_series1), length(data_series2)))
 )
 
 # Create the scatter plot
 plot <- ggplot(data = plot_data, aes(x = x, y = y, color = group)) +
   geom_point() +
-  
+
   # Add labels and legend
   labs(y = "Paris Agreement Reduction Pledges", x= "X-axis just to separate plot values", color = "Group") +
   scale_color_manual(values = c("blue", "red"), labels = c("High Income", "Not High Income")) +
   guides(color = guide_legend(title = "Group")) +
-  
+
   # Add a title
   labs(title = "Scatter Plot of rel_reduction_low3, Outliers Removed")
 
@@ -624,21 +1593,67 @@ plot <- ggplot(data = plot_data, aes(x = x, y = y, color = group)) +
 print(plot)
 ```
 
-We can get an intuitive feeling for this result with the above scatter plot. Ignore the horizontal variance - it's just to separate out the plot points. On the vertical axis defining reduction pledges, we can see that High Income and other countries aren't distributed differently. 
+The two `length()` calls are a sanity check: both print 51, confirming the index
+and the data agree in length. `c()` here is doing the stacking, gluing the two
+groups' values into one long vector, with `rep()` building a matching label
+vector so `ggplot` knows which point came from which group.
+
+`data.frame()` is base R's constructor, the plain equivalent of `tibble()` used
+earlier. `scale_color_manual()` overrides the default palette with named colors;
+`guides(color = guide_legend(title = "Group"))` sets the legend title, which
+`labs(color = "Group")` on the line above has already done, so it is redundant
+but harmless.
+
+We can get an intuitive feeling for this result with the above scatter plot. Ignore the horizontal variance - it's just to separate out the plot points. On the vertical axis defining reduction pledges, we can see that High Income and other countries aren't distributed differently.
 
 When we plot *with* the outliers, we see Kiribati's value down around -86,500, and then all others clumped together as a solid mass, which provides some justification for removing the outliers.
+
+Compare this scatter with the boxplot drawn a few chunks up. They show the same
+147 countries. The scatter makes the individual extremes visible, in particular
+the red point near +340 and the one near -200, both non-high-income. The boxplot
+makes the centers and the quartiles comparable at a glance. Neither is better;
+use the scatter when the individual observations matter and the boxplot when the
+comparison of distributions matters.
 
 
 # 7. Group Comparisons: Are average emission levels different by region?
 
 So, if High Income countries aren't making bigger or smaller reductions than others, what does overall emission variability look like?
 
-We'll look at actual emissions, on a per-capita basis, this time. Groups will be made by overall world region. Because these vary over time, we can't just take any entry in a country's data. Instead, we'll remove all NaN values and then take the most recent value. 
+We'll look at actual emissions, on a per-capita basis, this time. Groups will be made by overall world region. Because these vary over time, we can't just take any entry in a country's data. Instead, we'll remove all NaN values and then take the most recent value.
+
+Sections 3 to 6 all compared at most two groups. Here there are seven, and that
+changes the tool. Running a t-test on every pair would mean 21 tests, and at 5%
+each you would expect about one false positive by chance alone even if all seven
+regions were identical.
+
+The **ANOVA** (analysis of variance) sidesteps that with a single test of a
+single null: all seven group means are equal. It works by splitting the total
+variation in `GHG_percapita` into two parts, between groups and within groups,
+and comparing them:
+
+```
+F = (variation between group means) / (variation within groups)
+```
+
+If the regions really are alike, the between-group piece is just sampling noise
+of the same size as the within-group piece and F sits near 1. If the regions
+differ, the numerator grows and F rises. The **F distribution** gives the
+p-value, and it has two degrees of freedom numbers rather than one: 6 for the
+numerator (7 groups minus 1) and 201 for the denominator (208 observations minus
+7 groups).
+
+What the ANOVA does not tell you is *which* regions differ. That takes a
+follow-up, which is what `TukeyHSD()` provides at the end of this section.
 
 ### Hypotheses
 
 - H0: Mean per-capita emissions are equal across world regions
 - H1: Mean per-capita emissions are not equal across world regions
+
+Read H1 precisely: it says *at least one* region differs from at least one
+other. Rejecting H0 does not say all seven differ, and it does not name a
+culprit.
 
 ### Steps
 
@@ -663,6 +1678,23 @@ hypothesis_5_df <- hypothesis_5_df %>%
 print(hypothesis_5_df)
 ```
 
+The middle step is the one to study. `filter()` inside `group_by()` evaluates
+its condition separately within each group, so `year == max(year)` means "the
+maximum year *for this country*", not the maximum across the whole file. That is
+grouped filtering, and it is a distinct move from grouped summarizing: it keeps
+whole rows rather than collapsing them.
+
+Why the most recent year instead of a country average, as in section 4? Because
+the question is about emission *levels* now, not about a country's typical level
+over five decades. Averaging 1970 to 2015 would blend eras with very different
+energy systems.
+
+The result is 208 rows, one per country, and every one of them is from 2015.
+That uniformity is convenient but not guaranteed by the code: if one country's
+data ended in 2009, `max(year)` would return 2009 for it and the comparison
+would mix years. Check it rather than assume it, which is what the next chunk
+does for the regions.
+
 Quick check of what the world regions are:
 
 ```{r}
@@ -673,22 +1705,100 @@ unique_regions <- unique(hypothesis_5_df$wbregion)
 print(unique_regions)
 ```
 
-So, they're regions, not continents. 
+So, they're regions, not continents.
+
+`unique()` returns each distinct value once, in order of first appearance. Seven
+World Bank regions survive the cleaning. Their sizes are very unequal, which
+matters for what follows:
+
+```{r region-counts}
+# n() counts rows in the current group. Sorting by the mean makes the ordering
+# in the plot below easy to anticipate.
+region_summary <- hypothesis_5_df %>%
+  group_by(wbregion) %>%
+  summarise(
+    n_countries = n(),
+    mean_GHG    = mean(GHG_percapita),
+    median_GHG  = median(GHG_percapita),
+    sd_GHG      = sd(GHG_percapita)
+  ) %>%
+  arrange(desc(mean_GHG))   # desc() sorts largest first
+
+region_summary
+```
+
+North America has 4 countries and Europe & Central Asia has 50. A mean computed
+from 4 observations is a much shakier number than one computed from 50, and the
+confidence intervals in the Tukey output at the end of this section will reflect
+that: the North America comparisons have by far the widest intervals.
+
+```{r region-boxplot}
+# reorder(wbregion, GHG_percapita, FUN = median) sorts the regions by their
+# median so the boxes climb rather than sitting in alphabetical order.
+ggplot(hypothesis_5_df,
+       aes(x = reorder(wbregion, GHG_percapita, FUN = median), y = GHG_percapita)) +
+  geom_boxplot(fill = "grey85", outlier.shape = NA) +
+  geom_jitter(width = 0.15, alpha = 0.55, color = "steelblue", size = 1.6) +
+  # stat_summary computes something per group and draws it: here the mean,
+  # as a red diamond (shape 18), on top of the median line of the boxplot.
+  stat_summary(fun = mean, geom = "point", shape = 18, size = 3.5, color = "red") +
+  coord_flip() +
+  labs(
+    title = "Per-capita emissions by World Bank region, 2015",
+    subtitle = "Boxes show median and quartiles; red diamonds are group means; 208 countries",
+    x = "World Bank region",
+    y = "GHG per capita (2015)"
+  )
+```
+
+This is the ANOVA in picture form. Two features drive the result.
+
+The centers are not level. Sub-Saharan Africa and South Asia have medians of
+1.57 and 1.93, while North America's is 16.6 and Europe & Central Asia's is
+8.08. That vertical separation is the between-group variation in the F ratio's
+numerator.
+
+But the within-region spread is large and very uneven. Sub-Saharan Africa is
+tightly packed near zero with a handful of stragglers, and its standard
+deviation is 5.82; the Middle East & North Africa box is the widest of the seven
+at sd 16.0, reaching out to Qatar at 66.1, the highest value in the data. That
+spread is the denominator, and it is why F comes out at 4.5 rather than
+something much larger.
+
+Note also that the red mean diamonds and the black median lines disagree
+substantially in several regions. Six of the seven means sit to the right of
+their median, the signature of right-skew; the Middle East & North Africa gap is
+the widest, mean 13.8 against median 6.30. Only North America, with four
+countries, has a mean below its median. ANOVA tests means. With skewed groups, a
+test of means and a test of medians can reach different conclusions.
 
 
 ### Q5 Hypothesis Testing
 
 `aov()` is our F-test, like in Python. Its setup is different, but the outcome is the same.
 
-First, we input a formula, with our dependent variable (i.e. which one we want to test), with a tilde (~) connecting it with the variable that splits it into groups. 
+First, we input a formula, with our dependent variable (i.e. which one we want to test), with a tilde (~) connecting it with the variable that splits it into groups.
 
 This looks like `GHG_percapita ~ wbregion`
 
-In comparison, our Python equivalent involved us filtering the different samples ourselves and then inputting them separately. 
+In comparison, our Python equivalent involved us filtering the different samples ourselves and then inputting them separately.
 
 We also use a `data` argument, which states where to get the `formula` variables from.
 
 Then, we call `summary()` around our anova variable, and can extract the F-statistic and P-value.
+
+The **formula** is worth a paragraph, because it is R's single most distinctive
+piece of syntax and it recurs in `lm()`, `glm()` and most modelling functions.
+A formula is written `outcome ~ predictors` and is read "outcome modelled by
+predictors". It is not evaluated where you write it. It is an unevaluated
+description of a relationship that the modelling function then interprets, which
+is why you can write bare column names with no quotes and no `$`.
+
+Because `wbregion` is on the right of the tilde and is a character column,
+`aov()` converts it to a factor and treats its seven distinct values as seven
+groups. Had it been numeric, `aov()` would have fitted a straight line through
+it instead, which is a completely different model. That silent difference is the
+main reason to know what a factor is.
 
 ```{r, eval=FALSE}
 ?aov
@@ -712,9 +1822,46 @@ cat("F-statistic:", f_statistic, "\n")
 cat("P-value:", p_value, "\n")
 ```
 
-The high F-Stat leads to a very low P-value, and so we can reject the null hypothesis that the regions have equal per-capita emissions values. 
+The extraction line deserves unpacking. `summary()` on an `aov` object returns a
+list containing one data frame. `summary_result[[1]]` reaches into the list and
+pulls out that data frame; double brackets get the element itself, where single
+brackets `[1]` would return a one-element list still wrapped up. Then `$F` is
+the F column and `[1]` is its first entry, the row for `wbregion`. `"Pr(>F)"` is
+quoted because the name contains characters that are not legal in a bare R name.
+
+The full table is more informative than the two extracted numbers:
+
+```{r anova-table}
+summary_result
+```
+
+Read it column by column. `Df` 6 and 201 are the two degrees of freedom.
+`Sum Sq` splits the total variation: 2491 lies between the regional means and
+18353 lies within regions, so region accounts for 2491 / (2491 + 18353) = 12% of
+the variation in per-capita emissions. `Mean Sq` is `Sum Sq / Df`: 415.2 and
+91.3. `F value` is the ratio of those two, 415.2 / 91.3 = 4.547. The stars are
+R's significance codes, with three meaning p < 0.001.
+
+The high F-Stat leads to a very low P-value, and so we can reject the null hypothesis that the regions have equal per-capita emissions values.
+
+To be exact: F = 4.547 on 6 and 201 degrees of freedom, p = 0.000239. If all
+seven regions had the same mean, an F this large would appear about 2 times in
+10,000. Reject H0.
+
+Keep the effect size in view alongside that. Region explains 12% of the
+variation between countries; the other 88% is differences between countries
+within the same region. "Statistically significant" and "most of the story" are
+different claims.
 
 Extending this a bit, we can run a Tukey test, which analyzes each pair and reports a p-value for if the groups differ.
+
+Tukey's Honest Significant Differences runs all 21 pairwise comparisons but
+widens each interval so that the *family-wide* error rate stays at 5%. That is,
+the probability of at least one false positive across all 21 comparisons is 5%,
+not 5% per comparison. This is why the `p adj` column can be much larger than
+the p-value an ordinary t-test on the same pair would give: it is paying for the
+multiplicity. It is the same guard against researcher degrees of freedom that
+section 6 discussed, built into the procedure.
 
 ```{r}
 # Tukey Honest Significant Differences on the fitted ANOVA
@@ -722,6 +1869,55 @@ tukey_result <- TukeyHSD(anova_result)
 
 print(tukey_result)
 ```
+
+Each row is one pair, named `A-B`. `diff` is mean(A) minus mean(B). `lwr` and
+`upr` bound a 95% family-wise confidence interval for that difference, and
+`p adj` is the adjusted p-value. The decision rule: the pair differs
+significantly if the interval excludes zero, equivalently if `p adj` < 0.05.
+
+Twenty-one rows of numbers are hard to scan, so plot them.
+
+```{r tukey-plot}
+# TukeyHSD returns a list; $wbregion is a matrix. Convert to a data frame and
+# move the pair names out of the row names into a real column, because ggplot
+# cannot map row names to anything.
+tukey_df <- as.data.frame(tukey_result$wbregion) %>%
+  rownames_to_column(var = "pair")
+
+# The matrix column is literally named "p adj", with a space, so backticks are
+# needed to refer to it. Renaming it avoids that for the rest of the chunk.
+tukey_df <- tukey_df %>%
+  rename(p_adj = `p adj`) %>%
+  mutate(significant = if_else(p_adj < 0.05, "p adj < 0.05", "not significant"))
+
+ggplot(tukey_df, aes(x = diff, y = reorder(pair, diff), color = significant)) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  # geom_linerange draws the interval; supplying xmin/xmax makes it horizontal.
+  geom_linerange(aes(xmin = lwr, xmax = upr), linewidth = 0.7) +
+  geom_point(size = 2) +
+  scale_color_manual(values = c("p adj < 0.05" = "firebrick",
+                                "not significant" = "grey45")) +
+  labs(
+    title = "Tukey pairwise comparisons of regional per-capita emissions",
+    subtitle = "Family-wise 95% intervals; a pair differs only if its interval clears zero",
+    x = "Difference in mean GHG per capita (tonnes)",
+    y = "Region pair",
+    color = NULL
+  )
+```
+
+Read the chart against the dashed zero line. Nineteen of the 21 intervals cross
+it and are drawn in grey: those pairs are not distinguishable. Two clear it,
+both involving Sub-Saharan Africa, and they are red.
+
+Notice how wide the intervals are for any pair involving North America. That is
+the n = 4 problem made visible. All six of the widest intervals in the chart
+involve North America, and the two largest gaps in the whole table are its
+comparisons with South Asia (-13.69) and Sub-Saharan Africa (-12.54). Neither is
+significant, because four countries cannot pin the mean down: the South Asia
+comparison has an interval 34.9 units wide, against 15.1 for the significant
+Sub-Saharan Africa versus Middle East & North Africa pair, whose gap is smaller
+at -10.69.
 
 For reference, the group means themselves:
 
@@ -735,9 +1931,34 @@ avg_per_region <- hypothesis_5_df %>%
 print(avg_per_region)
 ```
 
+`na.rm = TRUE` tells `mean()` to drop missing values before computing rather
+than returning `NA`. It does nothing here, since `drop_na()` already removed
+them, but it is a sensible habit when you are not certain.
 
-Interestingly, it only registers Sub-Saharan Africa/Europe & Central Asia, and Sub-Saharan Africa/Middle East & North Africa as having statistically significant differences. 
 
+Interestingly, it only registers Sub-Saharan Africa/Europe & Central Asia, and Sub-Saharan Africa/Middle East & North Africa as having statistically significant differences.
+
+The two significant pairs and their adjusted p-values:
+
+- Sub-Saharan Africa vs Middle East & North Africa: difference -10.69, interval
+  [-18.22, -3.16], p adj = 0.00070
+- Sub-Saharan Africa vs Europe & Central Asia: difference -6.12, interval
+  [-11.81, -0.43], p adj = 0.0260
+
+The near miss is South Asia vs Middle East & North Africa at p adj = 0.0523,
+which would have been significant on an unadjusted test. That is the correction
+doing its job, and it is also a reminder that 0.05 is a convention rather than a
+threshold with any physical meaning.
+
+Why so few? Sub-Saharan Africa has the lowest mean (3.08) and 50 countries, so
+its comparisons combine large gaps with tight standard errors. The two regions with the highest means are both small: North America with 4
+countries, the smallest of the seven, and Middle East & North Africa with 20,
+the third smallest and the one with the largest internal spread of any region
+(sd 16.0). Only South Asia, with 8, sits between them on size. Their intervals are consequently too wide to exclude zero
+against anything but Sub-Saharan Africa, and in North America's case against
+nothing at all. The overall ANOVA can detect that *something* differs while
+Tukey, paying for 21 comparisons at once, can pin down only the two clearest
+cases.
 
 
 
@@ -746,13 +1967,38 @@ Interestingly, it only registers Sub-Saharan Africa/Europe & Central Asia, and S
 
 Much of our analysis has related to the relationship of emissions, or emission pledges, to national wealth. The following model will finish off our investigation.
 
-The "Environmental Kuznets Curve" relates environmental quality with economic growth. It suggests that as a country becomes wealthier, it will first see degraded environmental quality, likely as a result of growing energy and land use in manufacturing industries. However, beyond a certain point, further increases to per-capita income will cause the environment to improve again. From here on, marginal willingness to pay for environmental quality exceeds the marginal damage caused by economic growth (or said economic growth becomes more energy efficient, or the services sector comes to dominate manufacturing). 
+The "Environmental Kuznets Curve" relates environmental quality with economic growth. It suggests that as a country becomes wealthier, it will first see degraded environmental quality, likely as a result of growing energy and land use in manufacturing industries. However, beyond a certain point, further increases to per-capita income will cause the environment to improve again. From here on, marginal willingness to pay for environmental quality exceeds the marginal damage caused by economic growth (or said economic growth becomes more energy efficient, or the services sector comes to dominate manufacturing).
 
 We will model this by regressing per-capita greenhouse gas emissions against GDP/capita, and (GDP/capita)^2. The first GDP/Capita term provides the initial environmental degradation as industry grows. The quadratic term, if theory holds, will be negative and eventually dominate the linear term.
+
+Everything so far compared group averages. **Regression** does something
+different: it estimates how an outcome changes as a predictor changes,
+continuously, and reports a coefficient with its own standard error and
+p-value. The hypothesis-testing machinery is identical; only the estimand
+changes.
+
+Ordinary least squares picks the coefficients that minimize the sum of squared
+vertical distances between the observed points and the fitted line. Each
+coefficient answers "how much does the outcome move per one-unit move in this
+predictor, holding the other predictors fixed", and each comes with a t-test of
+the null that it is zero.
+
+Why a squared term. A model with GDP alone can only produce a straight line: as
+income rises, emissions rise forever, or fall forever. Adding `GDP^2` lets the
+fitted curve bend. The two coefficients together define a parabola. If b1 is
+positive and b2 is negative you get the inverted U the theory predicts, peaking
+at GDP = -b1 / (2 * b2). That turning point is the number to compute, and it is
+the number this section ends on.
 
 ### Hypotheses
 H0: There is no evidence of per-capita emissions falling with increasing wealth levels
 H1: A negative coefficient on the (GDP/capita)^2 term provides evidence of falling per-capita emissions with high wealth level
+
+A negative squared coefficient is necessary for the Kuznets story but not
+sufficient. The turning point also has to fall inside the range of GDP we
+actually observe. A curve that peaks at an income level no country has ever
+reached is, over the observed data, indistinguishable from a straight line
+sloping up. Hold that thought.
 
 ### Steps
 
@@ -774,6 +2020,22 @@ regression_df$GDP_percapita_square <- regression_df$GDP_percapita^2
 head(regression_df)
 ```
 
+Note the two styles of adding a column sitting side by side in this document.
+Section 3 used `mutate(total_pledges = ...)`; this chunk uses
+`regression_df$GDP_percapita_square <- ...`. Both work. Base R assignment with
+`$` is fine for a one-off; `mutate()` chains into a pipeline and reads better
+when several columns are created at once. Pick one per script and stay with it.
+
+Unlike every previous section, there is no collapsing to one row per country.
+The regression uses all 7436 country-year observations from 190 countries,
+1970 to 2015. That is a deliberate choice, since the relationship between income
+and emissions is meant to hold within a country over time as well as across
+countries. It also means the observations are not independent: Canada's 2014 and
+2015 rows are nearly the same country in nearly the same state. The classical
+standard errors printed below take no account of that, and they will be too
+small as a result. This is one of the two reasons the robust standard errors at
+the end of the section matter.
+
 
 First, it's never a bad idea to visualize our data. As we saw a few hypotheses back, it helps you catch outliers, and see any abnormal patterns in your data.
 
@@ -785,16 +2047,36 @@ log_ghgpc <- log(regression_df$GHG_percapita)
 # Create a scatter plot
 plot <- ggplot(data = data.frame(log_gdppc, log_ghgpc), aes(x = log_gdppc, y = log_ghgpc)) +
   geom_point(alpha = 0.4, size = 2) +
-  labs(x = "GDP per Capita", y = "GHG per Capita") +
-  ggtitle("Scatter Plot of GDP per Capita vs. GHG per Capita") +
-  
+  # Axis labels corrected: both variables on this plot are logged.
+  labs(x = "log(GDP per capita)", y = "log(GHG per capita)") +
+  ggtitle("Scatter Plot of log GDP per Capita vs. log GHG per Capita") +
+
   # Add linear regression line
   geom_smooth(method = "lm", color = "red", se = FALSE)
 
 print(plot)
 ```
 
-Working with logarithm values, the relationship is... iffy. However, the logarithms make this already a nonlinear relationship, compressing in the very high values. What if we use raw data? 
+`log()` in R is the natural logarithm, base e, not base 10; that is `log10()`.
+Logging both axes is standard for variables that span orders of magnitude, as
+these do: GDP per capita runs from 162 to 116,233 and GHG per capita from 0.41
+to 323. It is safe here only because both variables are strictly positive, which
+was checked. `log(0)` is `-Inf` and `log(-1)` is `NaN` with a warning.
+
+`geom_smooth(method = "lm")` fits a straight line by least squares and draws it.
+`se = FALSE` suppresses the shaded confidence band; `alpha = 0.4` makes the
+points partly transparent so that dense regions render darker, which is
+essential with 7436 overlapping points.
+
+Working with logarithm values, the relationship is... iffy. However, the logarithms make this already a nonlinear relationship, compressing in the very high values. What if we use raw data?
+
+What the plot actually shows, to put a number on "iffy": the correlation between
+the two logged variables is 0.76, and a simple log-log regression gives a slope
+of 0.55 with an R-squared of 0.58. So the association is strong and clearly
+upward, and the cloud is wide. Reading it as an elasticity, a 10% rise in income
+comes with a 5.5% rise in per-capita emissions on average. There is no visible
+downturn at the right-hand end, which is the first piece of evidence against the
+Kuznets story.
 
 ```{r}
 # Create variables
@@ -806,30 +2088,59 @@ plot <- ggplot(data = data.frame(gdppc, ghgpc), aes(x = gdppc, y = ghgpc)) +
   geom_point(alpha = 0.4, size = 2) +
   labs(x = "GDP per Capita", y = "GHG per Capita") +
   ggtitle("Scatter Plot of GDP per Capita vs. GHG per Capita") +
-  
+
   # Add quadratic regression line
   geom_smooth(method = "lm", formula = y ~ poly(x, 2), color = "red", se = FALSE)
 
 print(plot)
 ```
 
-Using non-logged, raw values, is rough. The data is blown way, way up by the extreme outliers on `GHG_percapita`. 
+`formula = y ~ poly(x, 2)` tells `geom_smooth` to fit a second-degree polynomial
+rather than a straight line, so the drawn curve matches the model specification
+we are about to estimate. `poly()` builds orthogonal polynomial terms; the fitted
+values are the same as from `x + x^2`, though the individual coefficients are
+scaled differently.
+
+Using non-logged, raw values, is rough. The data is blown way, way up by the extreme outliers on `GHG_percapita`.
 
 *However*, the greenhouse gas emissions per capita flattens out remarkably past ~25, with even some of the richest countries being only marginally higher than the poorest. The outliers may be problematic for our regression, but we can give it a try, in `reg_1`, using non-logged values.
+
+Reading the plot carefully: the vertical axis reaches past 300 because a handful
+of country-years have per-capita emissions above 60, but fewer than 1% do, so
+almost the entire cloud is squashed into the bottom tenth of the panel. The
+fitted red curve rises across the whole plotted range, with only slight bending
+near the right edge. The flattening the author describes is in the *scatter* at
+high emission levels, not in the fitted curve, and the points out at
+GDP per capita above 100,000 (0.2% of the sample) are what pull the right end of
+the curve around.
+
+That difference between the cloud and the curve is exactly what the coefficients
+below quantify.
 
 
 ### Running Regression
 
-The `lm()` function is our equivalent to the `sm.OLS()` function we used in Python. 
+The `lm()` function is our equivalent to the `sm.OLS()` function we used in Python.
 
-Its arguments are similar to `aov()`. 
+Its arguments are similar to `aov()`.
 
-- `formula`: specifies the outcome variable (y) and the explanatory variables (x1, x2, etc), like `y ~ x1 + x2 + x3 (...)` 
+- `formula`: specifies the outcome variable (y) and the explanatory variables (x1, x2, etc), like `y ~ x1 + x2 + x3 (...)`
 - `data`: specifies the dataframe to take `y`, `x1`, `x2`, etc, from
 
 We then run `summary()` to output our results. We first input the variable we assigned our regression to, and then our standard errors.
 
 `type`: our standard errors. We use "HC3" heteroskedasticity-robust standard errors again
+
+One difference from Python worth flagging. `sm.OLS()` in statsmodels requires
+you to add a constant column yourself with `sm.add_constant()`. `lm()` includes
+an intercept automatically. If you ever want to suppress it, write
+`y ~ x - 1` or `y ~ x + 0`, but you almost never should.
+
+Note also that `+` inside a formula does not mean addition. `y ~ x1 + x2` means
+"include x1 and include x2 as separate predictors". Formula syntax has its own
+grammar: `:` is an interaction, `*` is both main effects and their interaction,
+and `I()` protects real arithmetic, so `I(x^2)` would compute the square inline
+instead of creating the column beforehand as this section does.
 
 ```{r, eval=FALSE}
 ?lm
@@ -846,6 +2157,39 @@ reg_1 <- lm(GHG_percapita ~ GDP_percapita + GDP_percapita_square, data = regress
 print(summary(reg_1))
 ```
 
+Work through the output block by block.
+
+**Residuals.** The five-number summary of the prediction errors. Median -1.58
+against a maximum of +282 says the errors are wildly right-skewed: the model
+under-predicts a small number of very high emitters by an enormous margin. That
+is the first warning sign for the standard errors.
+
+**Coefficients.** Four columns per row.
+
+- `Estimate` is the fitted coefficient. The intercept is 2.992, so a country
+  with zero GDP per capita is predicted to emit 3.0 tonnes per person, which is
+  extrapolation outside the data and should not be interpreted. `GDP_percapita`
+  is 4.265e-04, meaning one extra dollar of GDP per capita comes with 0.0004
+  extra tonnes; multiply by 10,000 to get a usable statement, 4.3 extra tonnes
+  per additional $10,000. `GDP_percapita_square` is -6.068e-10, negative as the
+  theory predicts.
+- `Std. Error` is the estimated standard deviation of the coefficient across
+  repeated samples.
+- `t value` is Estimate / Std. Error, testing H0 that the coefficient is zero.
+  Same t-statistic as in sections 3 and 4, different quantity.
+- `Pr(>|t|)` is the two-tailed p-value for that null.
+
+The squared term has t = -2.052 and p = 0.0403. On classical standard errors,
+it clears 5%. Hold that result until the next chunk.
+
+**R-squared** is 0.2246: the model accounts for 22% of the variation in
+per-capita emissions. The adjusted version, 0.2243, penalizes for the number of
+predictors and is nearly identical here because 2 predictors against 7436
+observations costs almost nothing.
+
+**The F-statistic** at the bottom, 1076 on 2 and 7433 df, tests the joint null
+that both slope coefficients are zero. It is the same F distribution as section
+7's ANOVA, used for a different null.
 
 ```{r}
 # Create linear regression model with robust standard errors
@@ -855,9 +2199,100 @@ reg_robust <- lm(GHG_percapita ~ GDP_percapita + GDP_percapita_square, data = re
 coeftest(reg_robust, vcov = vcovHC(reg_robust, type = "HC3"))
 ```
 
-Our values come up mostly the same as yesterday, with differences only because of varying display methods in Python/R. 
+Our values come up mostly the same as yesterday, with differences only because of varying display methods in Python/R.
 
+Note first that `reg_robust` is the identical model to `reg_1`: same formula,
+same data, so the coefficient estimates are exactly the same. Robust standard
+errors change the *uncertainty* attached to the coefficients, never the
+coefficients themselves. The line could equally have been written
+`coeftest(reg_1, vcov = vcovHC(reg_1, type = "HC3"))`.
 
+What "robust" is protecting against is **heteroskedasticity**: error variance
+that changes across the range of the predictors. Classical OLS standard errors
+assume it is constant. The scatter plot above shows it plainly is not, since the
+vertical spread of emissions grows with GDP. `vcovHC()` from `sandwich`
+recomputes the variance matrix without that assumption, and `coeftest()` from
+`lmtest` re-runs the t-tests using it. `"HC3"` is the small-sample-corrected
+version and the sensible default.
 
+Now compare the two coefficient tables, because this is the punchline of the
+section:
 
+| Term | Estimate | Classical SE | Classical p | HC3 SE | HC3 p |
+|---|---|---|---|---|---|
+| (Intercept) | 2.992 | 0.1906 | < 2e-16 | 0.2728 | < 2e-16 |
+| GDP_percapita | 4.265e-04 | 2.010e-05 | < 2e-16 | 7.303e-05 | 5.4e-09 |
+| GDP_percapita_square | -6.068e-10 | 2.958e-10 | 0.0403 | 1.558e-09 | 0.6969 |
 
+The robust standard error on the squared term is 5.3 times the classical one,
+and the p-value moves from 0.040 to 0.697. Significant becomes nowhere near
+significant. The linear term survives comfortably either way.
+
+The conclusion depends entirely on which standard error you believe, and here
+the robust one is the more credible: the residuals are heavily skewed, the
+variance visibly widens with GDP, and the panel structure means observations
+within a country are correlated. So we do not reject H0. There is no reliable
+evidence of the quadratic turn.
+
+One more check settles it. Compute where the fitted parabola actually peaks:
+
+```{r turning-point}
+# coef() extracts the coefficient vector from a fitted model. Elements 2 and 3
+# are the linear and quadratic terms. For y = b0 + b1*x + b2*x^2 the vertex is
+# at x = -b1 / (2 * b2).
+b <- coef(reg_1)
+turning_point <- -b[2] / (2 * b[3])
+
+cat("Fitted turning point, GDP per capita:", round(as.numeric(turning_point)), "\n")
+cat("Highest GDP per capita observed:     ", round(max(regression_df$GDP_percapita)), "\n")
+```
+
+```{r regression-fit-plot}
+# Build a grid of GDP values spanning the observed range, compute the squared
+# term the same way the model expects, then predict() the fitted curve on it.
+prediction_grid <- tibble(
+  GDP_percapita = seq(min(regression_df$GDP_percapita),
+                      max(regression_df$GDP_percapita),
+                      length.out = 200)
+) %>%
+  mutate(GDP_percapita_square = GDP_percapita^2)
+
+prediction_grid$fitted <- predict(reg_1, newdata = prediction_grid)
+
+ggplot(regression_df, aes(x = GDP_percapita, y = GHG_percapita)) +
+  geom_point(alpha = 0.12, size = 1) +
+  geom_line(data = prediction_grid, aes(x = GDP_percapita, y = fitted),
+            color = "firebrick", linewidth = 1.1) +
+  # coord_cartesian zooms without discarding rows, so the fit is still computed
+  # on all 7436 observations. Using ylim() instead would drop points and
+  # silently refit anything drawn by geom_smooth.
+  coord_cartesian(ylim = c(0, 60)) +
+  labs(
+    title = "The fitted Kuznets curve never turns over inside the data",
+    subtitle = "7436 country-years, 1970-2015; vertical axis clipped at 60 for legibility",
+    x = "GDP per capita (USD)",
+    y = "GHG per capita (tonnes)"
+  )
+```
+
+The fitted turning point is at GDP per capita of about 351,000 USD. The richest
+observation in the data is 116,233 USD, three times smaller. The red curve in
+the plot is the fitted model over the entire observed range, and it rises the
+whole way, from 3.1 tonnes at the poorest observation to 44.4 at the richest,
+bending only slightly at the top.
+
+So the Kuznets result fails on all three counts at once. The squared coefficient
+is negative, but it is not statistically distinguishable from zero once the
+standard errors account for heteroskedasticity, and even taken at face value it
+places the emissions peak at an income level roughly three times anything
+observed. Within the range of the data, the relationship is a rising line. That
+is a clean negative result and it is worth stating as one.
+
+Caveats worth naming rather than burying, since this is a workshop and not a
+paper. The specification ignores country fixed effects, so it mixes differences
+between countries with changes within a country over time. It ignores the time
+dimension entirely, though technology and energy prices moved a great deal
+between 1970 and 2015. And 2397 rows lost to missing `GDP_percapita` are not
+missing at random, since poorer countries report national accounts less
+consistently. Any of the three could change the answer, and a serious version of
+this analysis would address all of them.
