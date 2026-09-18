@@ -1,0 +1,739 @@
+---
+title: 'Math/Stats Application Workshop: R Practice Set'
+output:
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    toc_depth: 3
+    number_sections: false
+    theme: readable
+    highlight: tango
+    code_folding: show
+    fig_width: 8
+    fig_height: 5
+    df_print: default
+---
+
+```{r setup, include=FALSE}
+# This chunk configures every later chunk. `include=FALSE` means the chunk runs
+# but neither its code nor its output appears in the knitted document.
+#
+# echo = TRUE      : show the R code in the output, not just the results
+# fig.align        : center every figure
+# dpi              : resolution of the generated PNG figures
+#
+# Warnings and errors are deliberately left visible. If a chunk complains, you
+# should see the complaint.
+knitr::opts_chunk$set(echo = TRUE, fig.align = "center", dpi = 96)
+```
+
+
+# Math/Stats Application Workshop: R Practice Set
+
+Sections:
+
+1. Data Import
+2. One Row per Country
+3. 1-Tail Hypothesis Test: Do countries have more than five climate policies?
+4. 2-Tail Means Comparison: Do high-income countries pass more climate laws?
+5. Proportion Comparison Test: Are carbon-market countries more likely to have signed the Copenhagen Accord?
+6. 2-Tail Means Comparison with Outliers: Do oil-rich countries pledge smaller reductions?
+7. Group Comparisons: Does urbanization differ by income group?
+8. Regression: Does national wealth predict the number of climate policies?
+
+
+## How to use this practice set
+
+Six new hypotheses on the same `policy_analysis.csv` you worked through in
+`r_applications.Rmd`. Nothing here needs a technique you have not already
+seen. Every test, every plot and every cleaning step has a worked example in
+that file. When you get stuck, open the section listed below and adapt the
+code.
+
+| Practice section | Technique | Worked example in r_applications.Rmd |
+|---|---|---|
+| 3 | One-sample t-test, one-tailed: `t.test(x, mu, alternative)` | Section 3 |
+| 4 | Two-sample Welch t-test: `t.test(x, y)` | Section 6 |
+| 5 | Two-proportion test: `prop.test(x, n, correct = FALSE)`, then `sqrt()` for z | Section 5 |
+| 6 | Welch t-test with an outlier check, then `wilcox.test(x, y)` | Section 6, including its index scatter and boxplot |
+| 7 | One-way ANOVA: `aov()`, `summary()`, `TukeyHSD()` | Section 7 |
+| 8 | Regression: `lm()`, `summary()`, `coeftest()` with `vcovHC(type = "HC3")` | Section 8 |
+
+The data preparation moves you will need also have worked examples:
+`select()` then `drop_na()` (every section of the reference), `group_by()`
+with `filter(year == max(year))` (reference section 7), `group_by()` with
+`summarise(mean(...))` (reference section 4), and `quantile()` (base R,
+`?quantile`).
+
+One function is new: `wilcox.test()`. It takes the same `x` and `y` arguments
+as `t.test()` and compares the two groups by rank rather than by mean, so an
+extreme value counts as "the largest" and nothing more. Run `?wilcox.test`
+when you reach section 6.
+
+Rules for every section:
+
+- Fill in each empty chunk so that it does what the comment at the top of the
+  chunk says.
+- Write your interpretation in the "Your interpretation" block. Say what the
+  statistic measures, what the p-value means under H0, whether you reject H0 at
+  the 5% level, and what the result says about the economics. State the
+  numbers.
+- Sections 1 and 2 are done for you. Everything from section 3 on is yours.
+
+
+```{r}
+# package import
+# load tidyverse library and here packages
+pacman::p_load(tidyverse, here, lmtest, sandwich)
+```
+
+Same four packages as the reference file. `tidyverse` for data handling and
+plots, `here` for paths, `lmtest` and `sandwich` for the robust standard
+errors in section 8.
+
+
+
+
+# 1. Data Import
+
+```{r}
+# import data
+
+# here() builds an absolute path from the project root. It finds that root by
+# looking for a marker file: the r_applications.Rproj sitting next to this .Rmd
+# is one such marker. That works when this folder is the open project.
+#
+# If R was started somewhere else (say the top of the Git repository), here()
+# locks onto that other root and the CSV will not be there. The second line is
+# the fallback: when knitting, knitr sets the working directory to the folder
+# holding this .Rmd, so the bare filename always resolves.
+csv_path <- here("policy_analysis.csv")
+if (!file.exists(csv_path)) csv_path <- "policy_analysis.csv"
+
+# show_col_types = FALSE suppresses the block of text readr otherwise prints
+# describing how it guessed each column's type.
+policy_df <- read_csv(csv_path, show_col_types = FALSE)
+
+# print data head
+head(policy_df)
+```
+
+Same file as the reference: 10388 country-year rows, 47 columns, 212
+countries, 1970 to 2018. The columns this practice set uses:
+
+- `cum_policies`: cumulative count of national climate policies adopted up to
+  that year.
+- `cum_laws`: cumulative count of climate laws passed by the legislature.
+- `cum_ETS`: cumulative count of emissions trading schemes in place.
+- `partytopledge2`: 1 if the country registered a target under the 2009
+  Copenhagen Accord, 0 if not.
+- `rel_reduction_low3`: the low-bound emission reduction pledged under the
+  Paris Agreement, in percent. Positive is a pledged cut, negative is a
+  pledged increase.
+- `oil_rents`: oil rents as a percent of GDP.
+- `urban_pop`: share of the population living in urban areas, in percent.
+- `GDP_percapita`, `Incomegroup`: as in the reference.
+
+
+
+
+# 2. One Row per Country
+
+All six hypotheses treat the country as the unit of observation, and all six
+use each country's most recent year. Section 7 of `r_applications.Rmd` built
+exactly this data frame with a grouped filter: `year == max(year)` evaluated
+inside `group_by(country)` keeps the latest row for each country. Do it once
+here and reuse `latest_df` in every section below.
+
+```{r}
+# one row per country: the most recent year each country appears in
+latest_df <- policy_df %>%
+  group_by(country) %>%
+  filter(year == max(year)) %>%
+  ungroup()
+
+# how many rows, and which years survived?
+nrow(latest_df)
+table(latest_df$year)
+```
+
+212 rows, every one from 2018. That uniformity matters: the `cum_` columns
+are cumulative counts, so the 2018 row holds each country's whole policy
+history. No averaging over years is needed for them and none should be done.
+
+```{r}
+# missing values in the columns this practice set uses, latest year only
+latest_df %>%
+  select(Incomegroup, cum_policies, cum_laws, cum_ETS, partytopledge2,
+         rel_reduction_low3, urban_pop, GDP_percapita, oil_rents) %>%
+  summarise(across(everything(), ~ sum(is.na(.x))))
+```
+
+Two cautions before you start.
+
+The latest row is not complete. `Incomegroup` is missing for 14 countries,
+`partytopledge2` for 28, `rel_reduction_low3` for 59, `urban_pop` for 16 and
+`GDP_percapita` for 29. Each section selects the columns it needs and then
+drops NA rows, as the reference file does, so each section works with a
+different number of countries. Report that number every time.
+
+`oil_rents` is NA in 2018 for every one of the 212 countries. The oil series
+stops in 2017. Section 6 has to go back to the full `policy_df` panel for
+that variable.
+
+
+
+
+# 3. 1-Tail Hypothesis Test: Do countries have more than five climate policies?
+
+The Paris Agreement asks every party to submit a nationally determined
+contribution and to deliver it through domestic measures. Delivery needs
+instruments: a carbon price, an efficiency standard, a renewable target, a
+land-use rule. `cum_policies` is the cumulative count of national climate
+policies a country has adopted up to that year, and in the 2018 row it is the
+country's full portfolio.
+
+A claim you will hear at climate conferences is that most countries now have
+a substantial climate policy portfolio. Put a number on "substantial": five
+policies. This section asks whether the average country, in its latest year,
+holds more than five.
+
+The test is one-tailed and the direction is "greater", because the claim is
+directional and it is stated before looking at the data. Reference section 3
+used `"less"` because 3 was a ceiling and no upper tail existed. Here there is
+no ceiling, so the direction is a substantive choice, and you must live with
+it whatever the data say. Reread the reference file's discussion of one-tailed
+versus two-tailed tests before you run this one, and pay attention to what a
+one-tailed p-value can and cannot tell you.
+
+### Our Hypotheses
+
+- H0: The mean number of cumulative climate policies per country is 5.
+- H1: The mean number of cumulative climate policies per country is greater
+  than 5.
+
+### Steps:
+
+1. From `latest_df`, select `country`, `year` and `cum_policies`. Drop rows
+   with NA.
+2. Report n, the mean, the median and the standard deviation of
+   `cum_policies`. Tabulate the distinct values with `table()`.
+3. Plot the distribution as a histogram with one bar per integer value and a
+   vertical line at the null value of 5. Label the axes and give it a title.
+4. Run `t.test()` with `mu = 5` and `alternative = "greater"`.
+5. Extract and print the t-statistic and the p-value. Print the full test
+   object as well, so the confidence interval is visible.
+6. Only after you have recorded the result of step 5: compute the p-value the
+   same test gives with `alternative = "less"` and with `"two.sided"`, and the
+   two-sided confidence interval. This is a check on your understanding of
+   the tail, not a second chance at the test.
+
+```{r}
+# Step 1: build hypothesis_1_df from latest_df with country, year and
+# cum_policies; drop NA rows; show head() and the row count
+```
+
+```{r}
+# Step 2: n, mean, median and sd of cum_policies, then table() of its values
+```
+
+```{r h1-plot}
+# Step 3: histogram of cum_policies with binwidth = 1 and boundary = -0.5 so
+# each bar sits on an integer; geom_vline at 5 for H0 and a second geom_vline
+# at the sample mean; axis labels, title and subtitle
+```
+
+```{r}
+# Step 4 and 5: one-sample t.test on cum_policies with mu = 5 and
+# alternative = "greater"; cat() the $statistic and $p.value; then print the
+# whole test object
+```
+
+```{r h1-other-tails}
+# Step 6: p-values from alternative = "less" and alternative = "two.sided" on
+# the same data, and the two-sided $conf.int
+```
+
+### Your interpretation
+
+*Write here: what the sign and size of the t-statistic mean, what the p-value
+means under H0, whether you reject H0 at the 5% level, and what the sample
+mean and the confidence interval say about the average country's policy
+portfolio. Compare the mean with the median. Then answer this: does a large
+p-value in a "greater" test mean there is no effect? Look at where the sample
+mean sits relative to 5 before you answer, and say what the "less" and
+two-sided p-values from step 6 add.*
+
+
+
+
+# 4. 2-Tail Means Comparison: Do high-income countries pass more climate laws?
+
+The reference file found no income gradient in two places. Section 5 showed
+that high-income and other countries join the Paris Agreement at the same
+rate, 96% each. Section 6 found no significant difference in their pledged
+reductions. Signing is cheap, and a pledge is a number on a form. Legislation
+is neither.
+
+`cum_laws` is the cumulative count of climate laws a country has passed:
+acts approved by a legislature, as distinct from executive strategies and
+ministerial plans. A law binds future governments and takes parliamentary
+time and legal drafting capacity. If income matters for climate action, it
+may show up here, in domestic follow-through, rather than in international
+commitments.
+
+The comparison is High income against everyone else, the same split as
+reference sections 5 and 6. Two-tailed, because a case can be made either
+way: rich countries have more legislative capacity, but many poorer
+countries have passed framework climate laws as a condition of climate
+finance.
+
+### Our Hypotheses
+
+- H0: High-income and non-high-income countries have the same mean number of
+  cumulative climate laws.
+- H1: The two means differ.
+
+### Steps:
+
+1. From `latest_df`, select `country`, `Incomegroup` and `cum_laws`. Drop rows
+   with NA. Note how many countries survive and why it is fewer than 212.
+2. Split into a high-income data frame and a not-high-income data frame with
+   `filter()`.
+3. For each group report n, mean, median and variance. Compare the two
+   variances before testing.
+4. Plot both groups as a boxplot with jittered points and the group means
+   marked. Label the axes and give it a title.
+5. Run the two-sample `t.test()` with `x` and `y`, two-sided. Leave
+   `var.equal` at its default of `FALSE`, so R runs Welch's version.
+6. Print the t-statistic, the p-value and the full test object.
+7. For comparison only: rerun with `var.equal = TRUE` and note how t and p
+   change. Then run `wilcox.test()` on the same two vectors and note its
+   p-value.
+
+```{r}
+# Step 1: build hypothesis_2_df from latest_df with country, Incomegroup and
+# cum_laws; drop NA rows; print the row count and the number of NA values in
+# latest_df$Incomegroup
+```
+
+```{r}
+# Step 2: filter into hypothesis_2_hi_df (Incomegroup == "High income") and
+# hypothesis_2_not_hi_df (Incomegroup != "High income")
+```
+
+```{r}
+# Step 3: for each group, cat() n, mean, median and var of cum_laws
+```
+
+```{r h2-plot}
+# Step 4: bind_rows() the two groups with a group label; boxplot with
+# outlier.shape = NA, geom_jitter with height = 0, stat_summary for the mean;
+# axis labels, title and subtitle
+```
+
+```{r}
+# Step 5 and 6: two-sample Welch t.test with x = high income and y = not high
+# income, alternative = "two.sided"; cat() the statistic and p-value; print
+# the full object
+```
+
+```{r h2-checks}
+# Step 7: the same test with var.equal = TRUE (Student's t), and wilcox.test()
+# on the same two vectors; print each p-value
+```
+
+### Your interpretation
+
+*Write here: the two means and their difference, what the t-statistic
+measures, what the p-value means, whether you reject H0 at 5%, and the
+confidence interval for the difference. Explain why Welch's test is the right
+choice given the two variances and why its degrees of freedom are not a whole
+number. Compare the medians with the means and say what that tells you about
+which countries drive the gap. Then say what the result means for the claim
+that income shows up in domestic legislation rather than in international
+pledges.*
+
+
+
+
+# 5. Proportion Comparison Test: Are carbon-market countries more likely to have signed the Copenhagen Accord?
+
+An emissions trading scheme (ETS) is a carbon market: the government caps
+total emissions, issues permits up to that cap, and lets firms trade them.
+Building one is a large institutional investment. `cum_ETS` counts the
+trading schemes a country has in place. In 2018 it is 0 for most countries, 1
+for a few dozen, and 2 for one.
+
+The Copenhagen Accord of 2009 asked countries to register emission targets
+for 2020. `partytopledge2` is 1 for countries that did. Reference section 3
+showed that most countries signed one or two of the three agreements rather
+than all three, and Copenhagen is the one most often skipped.
+
+The question is whether a country that has built a carbon market is more
+likely to have registered a Copenhagen target. Both are commitments to a
+quantified cap, so the two decisions should travel together.
+
+### Our Hypotheses
+
+- H0: The proportion that signed the Copenhagen Accord is the same for
+  countries with an ETS and countries without one.
+- H1: The two proportions differ.
+
+### Steps:
+
+1. From `latest_df`, select `country`, `cum_ETS` and `partytopledge2`. Drop
+   rows with NA. Report the count and tabulate `cum_ETS`.
+2. Create a logical column `has_ets` that is `TRUE` when `cum_ETS > 0`.
+3. For each value of `has_ets`, count the countries, count the signatories,
+   and compute the proportion that signed. The mean of a 0/1 column is the
+   proportion.
+4. Plot the two proportions as bars on a 0 to 1 axis, with the counts written
+   on the bars. Label the axes and give it a title.
+5. Run `prop.test()` with the counts read out of the data, not typed in. Use
+   `correct = FALSE` to match the z-test in the Python version.
+6. Take the square root of the chi-squared statistic to get the z-score.
+   Print the chi-squared, the p-value and z.
+7. List the countries that break the pattern: ETS without a Copenhagen target,
+   and a Copenhagen target without an ETS.
+
+Recall from reference section 5 that `prop.test()` reports a chi-squared
+statistic on 1 degree of freedom. For two groups, z = sqrt(chi-squared). The
+square root loses the sign, so read the direction from the two proportions.
+
+```{r}
+# Step 1 and 2: build hypothesis_3_df from latest_df with country, cum_ETS and
+# partytopledge2; drop NA rows; mutate has_ets = cum_ETS > 0; print the row
+# count and table(cum_ETS)
+```
+
+```{r}
+# Step 3: group_by(has_ets) and summarise total = n(), signed =
+# sum(partytopledge2), proportion = mean(partytopledge2); print it
+```
+
+```{r h3-plot}
+# Step 4: geom_col of the two proportions with geom_text labels showing
+# "signed of total (percent)"; coord_cartesian(ylim = c(0, 1.08)); a dashed
+# geom_hline at the pooled proportion; axis labels, title and subtitle
+```
+
+```{r}
+# Step 5 and 6: prop.test with x = c(signed with ETS, signed without) and
+# n = c(total with ETS, total without), alternative = "two.sided",
+# correct = FALSE; print the object; cat() chi-squared, p-value and
+# sqrt(statistic) as z
+```
+
+```{r h3-exceptions}
+# Step 7: filter() for has_ets & partytopledge2 == 0, then for !has_ets &
+# partytopledge2 == 1; print both
+```
+
+### Your interpretation
+
+*Write here: the two proportions and their difference in percentage points,
+what the z-score measures, what the p-value means, whether you reject H0, and
+what the confidence interval for the difference says. Then address two
+cautions: how much does a test add when the gap is this large, and what does
+the size of the smaller group do to the precision of its proportion? Finally,
+look at the exceptions from step 7 and say whether this is evidence that
+carbon markets cause countries to pledge, or evidence of something else.*
+
+
+
+
+# 6. 2-Tail Means Comparison with Outliers: Do oil-rich countries pledge smaller reductions?
+
+`oil_rents` is oil rents as a percent of GDP: the value of crude oil
+production minus the cost of producing it, relative to the size of the
+economy. An economy that earns a large share of its income from oil has more
+to lose from global decarbonization, and its government may pledge less in
+Paris as a result. That is the hypothesis.
+
+Two data problems stand between the question and the test.
+
+First, `oil_rents` is NA in the 2018 row for every country. The oil series
+ends in 2017. So the oil measure has to be built from the full panel: average
+each country's `oil_rents` over all the years it reports, then join that one
+number per country to the latest-year pledge. Reference section 4 averaged
+`GHG_percapita` over years in exactly this way.
+
+Second, the outcome is `rel_reduction_low3`, the same variable as reference
+section 6. You saw what Kiribati, Latvia and Madagascar did to that section.
+They are still in the data. Check for outliers before testing, show the naive
+test and the trimmed test side by side, and then run the rank-based
+alternative that does not care about them.
+
+Define oil-rich as the top quartile of mean oil rents among the countries
+that have both a pledge and an oil series. That is: compute the 75th
+percentile after the join, not before it.
+
+Sign convention, from the reference: a positive `rel_reduction_low3` is a
+pledged cut and a negative value is a pledged increase.
+
+### Our Hypotheses
+
+- H0: Oil-rich and other countries pledge the same mean Paris reduction.
+- H1: The two means differ.
+
+### Steps:
+
+1. From the full `policy_df`, select `country` and `oil_rents`, drop NA, then
+   `group_by(country)` and `summarise()` the mean as `mean_oil_rents`. Count
+   the countries and check which years the oil series covers.
+2. From `latest_df`, select `country` and `rel_reduction_low3`, drop NA.
+3. `inner_join()` the two data frames by `country`. Report how many countries
+   have both values.
+4. Compute the 75th percentile of `mean_oil_rents` with `quantile()` on the
+   joined data. Create `oil_rich` as "Oil-rich" when `mean_oil_rents` is at
+   or above that value and "Rest" otherwise. Tabulate it.
+5. For each group report n, mean, median and standard deviation. Compare each
+   mean with its median.
+6. Check for outliers before testing. Sort by `rel_reduction_low3` with
+   `arrange()` and look at both ends. Plot the values as an index scatter as
+   in reference section 6, colored by group, with the most extreme point
+   labeled.
+7. Run the naive Welch `t.test()` on all countries.
+8. Remove the outliers you identified, state the rule you used, and rerun the
+   summary and the test.
+9. Run `wilcox.test()` on the full data as the robust alternative. Run it on
+   the trimmed data too.
+10. Plot the trimmed data as a boxplot by group with jittered points and a
+    dashed line at zero.
+11. Sensitivity: find the oil-rich country whose `mean_oil_rents` is closest
+    to the cutoff, and compute the oil-rich mean pledge without it.
+
+```{r}
+# Step 1: oil_avg_df from policy_df: select country and oil_rents, drop_na(),
+# group_by(country), summarise mean_oil_rents = mean(oil_rents) and
+# n_years = n(); print nrow() and the range of years with non-NA oil_rents
+```
+
+```{r}
+# Step 2: pledge_df from latest_df: select country and rel_reduction_low3,
+# drop_na(); print nrow()
+```
+
+```{r}
+# Step 3: hypothesis_4_df <- inner_join(oil_avg_df, pledge_df, by = "country");
+# print nrow()
+```
+
+```{r}
+# Step 4: oil_cut <- quantile(hypothesis_4_df$mean_oil_rents, 0.75); print it;
+# mutate oil_rich = if_else(mean_oil_rents >= oil_cut, "Oil-rich", "Rest");
+# table(oil_rich)
+```
+
+```{r}
+# Step 5: group_by(oil_rich) and summarise n, mean, median, sd of
+# rel_reduction_low3
+```
+
+```{r}
+# Step 6a: arrange(rel_reduction_low3) and head(6); arrange(desc(...)) and
+# head(4)
+```
+
+```{r h4-index-plot}
+# Step 6b: index scatter. Add idx = seq_len(n()) after arranging by country;
+# geom_point colored by oil_rich; geom_text label only for the one point below
+# -10000; axis labels saying the x axis is spacing only; title and subtitle
+```
+
+```{r}
+# Step 7: split into hypothesis_4_rich_df and hypothesis_4_rest_df; Welch
+# t.test with x = oil-rich, y = rest, alternative = "two.sided"; cat() the
+# statistic and p-value; print the full object
+```
+
+```{r}
+# Step 8: outliers <- c(...); hypothesis_4_trim_df <- filter(!country %in%
+# outliers); group summary again; Welch t.test again on the trimmed groups;
+# cat() and print
+```
+
+```{r}
+# Step 9: wilcox.test(x = oil-rich, y = rest) on the full data and on the
+# trimmed data; print both
+```
+
+```{r h4-box-plot}
+# Step 10: boxplot of the trimmed data by oil_rich with geom_jitter and a
+# dashed geom_hline at 0; axis labels, title and subtitle
+```
+
+```{r h4-sensitivity}
+# Step 11: among the oil-rich rows, arrange(mean_oil_rents) and head(3); then
+# mean of rel_reduction_low3 for the oil-rich group without that lowest
+# country
+```
+
+### Your interpretation
+
+*Write here: the naive means, why one of them is absurd and which single
+country produces it, how the trimmed test differs from the naive one, and
+what the Mann-Whitney test adds. Report the statistic and p-value for each
+version, in a small table. State whether you reject H0 under any of them.
+Then say what the exercise teaches about a t-test on data with one value 180
+times larger than the next, and whether the top-quartile definition of
+oil-rich is itself a researcher degree of freedom, using what step 11
+shows.*
+
+
+
+
+# 7. Group Comparisons: Does urbanization differ by income group?
+
+Development economics treats urbanization as part of structural
+transformation: labor leaves agriculture, moves to cities, and productivity
+rises. `urban_pop` is the share of a country's population living in urban
+areas, in percent. `Incomegroup` is the World Bank's four-way classification.
+
+Why this matters for climate policy: cities concentrate emissions from
+buildings and transport, and they are also where policy reach is greatest. A
+country that is 80% urban and one that is 30% urban face different abatement
+problems. Before using urbanization as a control anywhere, it is worth
+knowing how tightly it tracks income.
+
+Four groups, so the tool is the one-way ANOVA from reference section 7,
+followed by Tukey's HSD to see which pairs differ. Reference section 7 had
+seven regions with very unequal sizes and found F = 4.5 with region
+explaining 12% of the variation. Expect something different here.
+
+### Our Hypotheses
+
+- H0: Mean urban population share is the same in all four income groups.
+- H1: At least one income group's mean differs from at least one other.
+
+### Steps:
+
+1. From `latest_df`, select `country`, `Incomegroup` and `urban_pop`. Drop
+   rows with NA. Report the count.
+2. Summarise by `Incomegroup`: n, mean, median and sd. Arrange by the mean.
+3. Boxplot with jittered points, groups ordered by median, means marked.
+   Label the axes and give it a title.
+4. Fit `aov(urban_pop ~ Incomegroup, data = ...)`. Print `summary()` and
+   extract the F-statistic and the p-value.
+5. Run `TukeyHSD()` on the fitted model and print it.
+6. Plot the Tukey intervals as in reference section 7.
+
+```{r}
+# Step 1: hypothesis_5_df from latest_df with country, Incomegroup and
+# urban_pop; drop_na(); print nrow()
+```
+
+```{r}
+# Step 2: group_by(Incomegroup) and summarise n_countries, mean, median, sd of
+# urban_pop; arrange(mean)
+```
+
+```{r h5-boxplot}
+# Step 3: boxplot with x = reorder(Incomegroup, urban_pop, FUN = median),
+# geom_jitter, stat_summary(fun = mean) as a red diamond, coord_flip(); axis
+# labels, title and subtitle
+```
+
+```{r}
+# Step 4: aov(urban_pop ~ Incomegroup, data = hypothesis_5_df); summary();
+# extract F and p with [[1]]$F[1] and [[1]]$"Pr(>F)"[1]; cat() both; print
+# the summary table
+```
+
+```{r}
+# Step 5: TukeyHSD() on the fitted model; print it
+```
+
+```{r h5-tukey-plot}
+# Step 6: convert the Tukey matrix to a data frame with rownames_to_column(),
+# rename `p adj` to p_adj, flag significant pairs, and draw geom_linerange
+# intervals with a dashed line at zero; axis labels, title and subtitle
+```
+
+### Your interpretation
+
+*Write here: the four group means in order, what F measures and what its
+value says relative to the reference file's F of 4.5, what the p-value means,
+whether you reject H0, and what share of the variation in urbanization lies
+between income groups (compute it from the Sum Sq column). Then read the
+Tukey table: which pairs differ, which pair does not, and why that one pair
+fails when the others succeed. Finish with what the monotone pattern means
+for using urbanization as a control variable alongside income.*
+
+
+
+
+# 8. Regression: Does national wealth predict the number of climate policies?
+
+Reference section 8 asked whether wealth bends the emissions curve and found
+that it does not, once the standard errors were made robust. This section
+asks a simpler version of the same question on a different outcome. The
+Kuznets logic says rich countries demand environmental quality and their
+governments supply policy in response. If so, the number of climate policies
+a country has adopted should rise with income.
+
+The model is a straight line: `cum_policies` on `log10(GDP_percapita)`, one
+observation per country, latest year. Log base 10 is used because GDP per
+capita in this sample runs from about 200 dollars to about 110,000, nearly
+three orders of magnitude, and a slope on `log10` reads as "policies per
+tenfold increase in income", which is a natural unit for a variable with that
+range. The reference used `log()`, base e. Both are fine; the coefficient
+just has different units. Choose one and say which.
+
+### Our Hypotheses
+
+- H0: The slope on `log10(GDP_percapita)` is zero. Wealth does not predict
+  policy count.
+- H1: The slope is not zero.
+
+### Steps:
+
+1. From `latest_df`, select `country`, `cum_policies` and `GDP_percapita`.
+   Drop NA rows. Report the count.
+2. Add a column `log10_gdp` equal to `log10(GDP_percapita)`. Check its range.
+3. Scatter plot of `cum_policies` against `log10_gdp` with a fitted straight
+   line. Label the axes and give it a title.
+4. Fit `lm(cum_policies ~ log10_gdp, data = ...)` and print `summary()`.
+5. Re-test the coefficients with HC3 robust standard errors:
+   `coeftest(model, vcov = vcovHC(model, type = "HC3"))`.
+6. Compare the classical and robust standard errors on the slope, and print
+   the classical confidence interval for the slope with `confint()`.
+
+```{r}
+# Step 1 and 2: regression_df from latest_df with country, cum_policies and
+# GDP_percapita; drop_na(); mutate log10_gdp = log10(GDP_percapita); print
+# nrow() and range(log10_gdp)
+```
+
+```{r h6-plot}
+# Step 3: geom_point of cum_policies against log10_gdp; geom_smooth(method =
+# "lm", formula = y ~ x, se = TRUE); axis labels, title and subtitle
+```
+
+```{r}
+# Step 4: reg_1 <- lm(cum_policies ~ log10_gdp, data = regression_df);
+# print(summary(reg_1))
+```
+
+```{r}
+# Step 5: coeftest(reg_1, vcov = vcovHC(reg_1, type = "HC3"))
+```
+
+```{r}
+# Step 6: cat() the classical SE from summary(reg_1)$coefficients[2, 2] and
+# the HC3 SE from the coeftest object [2, 2]; confint(reg_1)
+```
+
+### Your interpretation
+
+*Write here: the slope and what one unit of `log10_gdp` means in dollars, the
+t-statistic and p-value on the slope, whether you reject H0, and what the
+R-squared says about how much of the variation in policy counts the line
+explains. Compare the classical and HC3 standard errors and say whether the
+choice changes the conclusion. Then compare this result with the reference
+file's Kuznets regression: what did the squared term do there, and what does
+the slope do here? Finish with what a null result like this one does and
+does not say about wealth and climate policy.*
