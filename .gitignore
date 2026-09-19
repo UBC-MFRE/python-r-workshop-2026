@@ -10,3 +10,10 @@ __pycache__/
 # Instructor answer keys, kept out of the student repository
 *_SOLUTIONS.ipynb
 *_SOLUTIONS.Rmd
+.Rproj.user
+
+# Knit intermediates and PDF outputs from the R notebooks
+r/**/*.tex
+r/**/*.pdf
+stat applications/**/*.tex
+stat applications/**/*.pdf
