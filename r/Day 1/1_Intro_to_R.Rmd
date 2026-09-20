@@ -1,6 +1,6 @@
 ---
-title: "MFRE Summer Session: R Workshop 1"
-subtitle: "Data structures, control flow, functions, and a first look at ggplot2"
+title: 'MFRE Summer Session: R Workshop 1'
+subtitle: Data structures, control flow, functions, and a first look at ggplot2
 output:
   html_document:
     toc: true
@@ -15,6 +15,9 @@ output:
     df_print: paged
     fig_width: 7
     fig_height: 4.5
+  pdf_document:
+    toc: true
+    toc_depth: '4'
 ---
 
 # R Workshop 1
@@ -106,6 +109,14 @@ These are our real basic data types. So basic, in fact, that most more advanced 
 4.  `our_log` is a Logical data type. These are TRUE/FALSE values that are extremely useful for stating if certain conditions or states are met. One quirk: TRUE is considered as equal to 1, and FALSE is equal to 0. This will be useful when working with dataframes.
 
 Since you've done some basic Python, we could relate R data types to Python (near) equivalents.
+
+
+```{r}
+
+our_int + our_double
+
+```
+
 
 R Character \~ Python String
 
