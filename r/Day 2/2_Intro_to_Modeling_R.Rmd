@@ -1,6 +1,6 @@
 ---
-title: "R Workshop 2: Data Cleaning with dplyr and Plotting with ggplot2"
-subtitle: "UBC MFRE, Introduction to R"
+title: 'R Workshop 2: Data Cleaning with dplyr and Plotting with ggplot2'
+subtitle: UBC MFRE, Introduction to R
 output:
   html_document:
     toc: true
@@ -11,6 +11,9 @@ output:
     highlight: tango
     code_folding: show
     fig_caption: true
+  pdf_document:
+    toc: true
+    toc_depth: '3'
 ---
 
 ```{r setup, include = FALSE}
