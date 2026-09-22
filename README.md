@@ -137,12 +137,12 @@ Part 2:
 ### Intro to R (I), Fri 11 Sep
 
 - [1_Intro_to_R.Rmd](r/Day%201/1_Intro_to_R.Rmd) - R data structures, control flow, functions, and coding style. Open [r/r.Rproj](r/r.Rproj) first.
-- [1_Intro_to_R.nb.html](r/Day%201/1_Intro_to_R.nb.html) - rendered notebook for reading.
+- [1_Intro_to_R.html](r/Day%201/1_Intro_to_R.html) - rendered notebook for reading.
 
 ### Intro to R (II), Fri 11 Sep
 
 - [2_Intro_to_Modeling_R.Rmd](r/Day%202/2_Intro_to_Modeling_R.Rmd) - `dplyr`, `ggplot2`, and applied data cleaning.
-- [2_Intro_to_Modeling_R.nb.html](r/Day%202/2_Intro_to_Modeling_R.nb.html) - rendered notebook for reading.
+- [2_Intro_to_Modeling_R.html](r/Day%202/2_Intro_to_Modeling_R.html) - rendered notebook for reading.
 
 ### Stat applications, R (Fri 18 Sep)
 
@@ -209,10 +209,10 @@ python-r-workshop-2026/
         r.Rproj
         Day 1/
             1_Intro_to_R.Rmd
-            1_Intro_to_R.nb.html
+            1_Intro_to_R.html
         Day 2/
             2_Intro_to_Modeling_R.Rmd
-            2_Intro_to_Modeling_R.nb.html
+            2_Intro_to_Modeling_R.html
     resources/
         climate change pledges actions and outcomes.pdf
     stat applications/
